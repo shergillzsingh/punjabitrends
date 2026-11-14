@@ -176,11 +176,11 @@ Niyam:
 
 def make_article(topic, section):
     if section == "punjab":
-        scope = "Sirf Punjab naal sambandh rakh. Punjab da impact zaroor dass."
+        scope = "Only Related to Punjab. also Impact on Punjab."
     elif section == "india":
-        scope = "Sirf India naal sambandh rakh. Punjab de local topics na pa. Punjab te ki asar pavega, oh v dass."
+        scope = "Only Related to India. don't include Punjab. and Impact on Punjab"
     else:
-        scope = "Sirf Duniya (International) naal sambandh rakh. India-Punjab de local topics na pa. Punjab / India te ki asar pavega, oh v dass."
+        scope = "Only Related to International, World Level. don't Include India-Punjab. impact on Punjab / India."
 
     prompt = f"""
 Tusi ik Punjabi news writer ho. Heth likhe Trending Topic te Gurmukhi Punjabi vich ik saada, saaf-suthra article likho.
