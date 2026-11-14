@@ -1,0 +1,27 @@
+name: PunjabTrends Daily
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install packages
+        run: pip install feedparser google-genai
+      - name: Run main.py
+        run: python main.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Save JSON
+        run: |
+          git config user.name "PunjabTrends Bot"
+          git config user.email "bot@punjabtrends.com"
+          git add today_trends.json
+          git commit -m "Daily update" || true
+          git push
