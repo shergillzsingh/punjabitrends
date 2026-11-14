@@ -41,7 +41,6 @@ RSS_INDIA = [
     "https://www.navjivanindia.com/stories.rss?section=india",
     "https://www.thehindu.com/news/national/feeder/default.rss",
     "https://indianexpress.com/section/india/feed/",
-    "https://www.bbc.com/punjabi/index.xml",
 ]
 
 RSS_WORLD = [
@@ -49,7 +48,6 @@ RSS_WORLD = [
     "https://www.thehindu.com/news/international/feeder/default.rss",
     "https://indianexpress.com/section/world/feed/",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://www.bbc.com/punjabi/index.xml",
 ]
 
 # ================= FALLBACK - Je RSS khali hove =================
@@ -164,7 +162,7 @@ Topic Hindi ya English vich ho sakda hai.
 Topic: {topic}
 
 Niyam:
-1. Sirf Gurmukhi Punjabi vich likho. Roman Punjabi na varteo.
+1. Sirf Gurmukhi Punjabi vich likho. Don't use Roman Punjabi.
 2. Sirf 1 line deo - sirf Punjabi Topic. Koi ** , ## , heading, ya vyakhya na deo.
 3. Jivein: "Delhi Mein Pradushan Badha" -> "ਦਿੱਲੀ ਵਿੱਚ ਪ੍ਰਦੂਸ਼ਣ ਵਧਿਆ"
 """
@@ -190,17 +188,17 @@ Topic: {topic}
 Section: {section} - {scope}
 
 Zaroori niyam:
-1. Topic Hindi ya English vich v ho sakda hai - tusi usnu padh ke Punjabi vich samjhao.
-2. Boli: Sirf Gurmukhi Punjabi. Roman Punjabi bilkul na varteo.
+1. Topic Hindi ya English vich v ho sakda hai - tusi usnu padh ke Gurmukhi Punjabi vich samjhao. 
+2. Boli: Sirf Gurmukhi Punjabi. Don't use Roman Punjabi.
 3. ** , ## , # , * - kade v na varteo. Bold layi ** na pao.
-4. Shuru vich date ya heading na pao. Sidha "Sat Sri Akal Dosto!" naal shuru karo.
+4. Shuru vich date ya heading na pao. Sidha "Topic" naal shuru karo.
 5. Article di lambai: 350-450 shabd.
 6. Structure:
-   - Para 1: Ki hoya? Ki trending hai te kyon?
+   - Para 1: What Happened? Why this topic in trending?
    - Para 2: Background - Pehlan ki si, hun ki hai?
-   - Para 3: Dooje passe ki kehnde ne? Dooji dhir / virodhi pakh ki kehnda?
-   - Para 4: Dooje states / deshan naal tulna - othe ki hoya?
-   - Para 5: Punjab te ki asar? Kitna safal ya asafal?
+   - Para 3: What peoples/opponets says about this topic,
+   - Para 4: Dooje states / deshan naal tulna - othe ki hoya related to this topic.
+   - Para 5: Punjab te ki asar? successfull or unsuccessfull
    - Para 6: Agge ki hovega? What next?
 7. Koi jhoothi khabar na banao. Je pakki jaankari na hove tan "hun tak mili jaankari mutabik" likho.
 8. Sirf article da text deo. Koi heading, date, ya ** na deo.
