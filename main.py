@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 MODELS = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
-TOP_N = 7  # Har section vich kinne lekh - 10 chahide tan 10 kar de
+TOP_N = 10  # Har section vich kinne lekh - 10 chahide tan 10 kar de
 
 IST = ZoneInfo("Asia/Kolkata")
 TODAY = datetime.now(IST)
