@@ -32,8 +32,8 @@ RSS_PUNJAB = [
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
     "https://www.ptcnews.tv/rssfeed/punjab",
     "https://www.bhaskar.com/rss-v1--category-1743.xml",
-    "https://www.tribuneindia.com/rss/feed?catId=14",
-    "https://www.bbc.com/punjabi/index.xml",
+    "https://publish.tribuneindia.com/state/punjab/feed/",
+    "https://raw.githubusercontent.com/bbc/world-service-rss/refs/heads/main/punjabi.md",
 ]
 
 RSS_INDIA = [
