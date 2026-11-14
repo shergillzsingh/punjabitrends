@@ -30,18 +30,21 @@ RSS_PUNJAB = [
     "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
     "https://www.ptcnews.tv/rssfeed/punjab",
+    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
 ]
 
 RSS_INDIA = [
-    "https://www.bbc.com/punjabi/index.xml",
+    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/national.xml",
-    "https://www.ptcnews.tv/rssfeed/national",
+    "https://www.ptcnews.tv/rssfeed/punjabi-news-nation",
 ]
 
 RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://www.ptcnews.tv/rssfeed/international",
-    "https://www.bbc.com/punjabi/index.xml",
+    "https://www.ptcnews.tv/rssfeed/punjabi-news-world",
+    "https://www.aljazeera.com/xml/rss/all.xml",
+    "https://rss.dw.com/rdf/rss-en-top",
+    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
 ]
 
 # ================= HELPERS =================
@@ -158,7 +161,7 @@ Zaroori niyam:
 
 def build_section(section_name, rss_list, output_file):
     print(f"\n========== {section_name.upper()} ==========")
-    topics = get_trending_topics(rss_list, max_topics=TOP_N + 5)
+    topics = get_trending_topics(rss_list, max_topics=TOP_N + 10)
     print(f"Topics mile: {len(topics)}")
 
     # Je RSS fail hove tan purani file ton topics le lo (fallback)
