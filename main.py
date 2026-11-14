@@ -30,21 +30,24 @@ RSS_PUNJAB = [
     "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
     "https://www.ptcnews.tv/rssfeed/punjab",
-    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
+    "https://www.bhaskar.com/rss-v1--category-1743.xml",
+    "https://publish.tribuneindia.com/state/punjab/feed/"
 ]
 
 RSS_INDIA = [
-    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
-    "https://punjab.news18.com/commonfeeds/v1/pan/rss/national.xml",
-    "https://www.ptcnews.tv/rssfeed/punjabi-news-nation",
+    "https://www.bhaskar.com/rss-v1--category-1061.xml",
+    "https://www.navjivanindia.com/stories.rss?section=india",
+    "https://www.thehindu.com/news/national/feeder/default.rss",
+    "https://indianexpress.com/section/india/feed/",
+    "https://publish.tribuneindia.com/newscategory/india/feed/",
+    "https://www.yugmarg.com/rssfeed/national-rss.xml",
 ]
 
 RSS_WORLD = [
-    "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://www.ptcnews.tv/rssfeed/punjabi-news-world",
-    "https://www.aljazeera.com/xml/rss/all.xml",
-    "https://rss.dw.com/rdf/rss-en-top",
-    "https://news.google.com/rss?hl=pa-IN&gl=IN%ceid=IN:pa",
+    "https://www.bhaskar.com/rss-v1--category-1125.xml",
+    "https://www.thehindu.com/news/international/feeder/default.rss",
+    "https://indianexpress.com/section/world/feed/",
+    "https://publish.tribuneindia.com/newscategory/world/feed/",
 ]
 
 # ================= HELPERS =================
