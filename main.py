@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 # ================= CONFIG =================
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
+MODELS = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
 TOP_N = 7  # Har section vich kinne lekh - 10 chahide tan 10 kar de
 
