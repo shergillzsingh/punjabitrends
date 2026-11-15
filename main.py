@@ -98,14 +98,13 @@ def get_trending_topics(rss_list):
     topics = sorted(topics, key=lambda x: x["count"], reverse=True)
     return topics[:25]
 
-def safe_wait(seconds=5):
-    print(f"Waiting {seconds} sec...")
+def safe_wait(seconds=10):
+    print(f"Waiting {seconds} sec to avoid Rate Limit...")
     time.sleep(seconds)
 
 def extract_json(text):
     """AI ਦੇ ਜਵਾਬ ਵਿੱਚੋਂ ਸੁਰੱਖਿਅਤ ਤਰੀਕੇ ਨਾਲ JSON ਕੱਢਣ ਲਈ"""
     text = text.strip()
-    # ਜੇਕਰ ```json ... ``` ਲੱਗਾ ਹੋਵੇ ਤਾਂ ਹਟਾਓ
     match = re.search(r'\[.*\]', text, re.DOTALL)
     if match:
         text = match.group(0)
@@ -178,7 +177,7 @@ def call_ai(category, topics, count_needed=5):
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
-                    tools=[{"google_search": {}}],  # ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅੰਕੜਿਆਂ ਲਈ
+                    tools=[{"google_search": {}}],
                     temperature=0.7,
                     max_output_tokens=32000,
                 )
@@ -189,7 +188,7 @@ def call_ai(category, topics, count_needed=5):
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
             if i < len(MODELS) - 1:
-                safe_wait(5)
+                safe_wait(10)
             continue
     print(f"All models failed for {category}")
     return []
@@ -198,13 +197,13 @@ def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
     
-    # ਪਹਿਲੀ ਵਾਰ 5 ਖ਼ਬਰਾਂ ਲਓ (ਤਾਂ ਜੋ ਡਿਟੇਲ ਪੂਰੀ ਡੂੰਘੀ ਆਵੇ ਤੇ ਟੋਕਨ ਨਾ ਕੱਟੇ ਜਾਣ)
+    # ਪਹਿਲੀ ਵਾਰ 5 ਖ਼ਬਰਾਂ ਲਓ
     news = call_ai(category, topics[:12], count_needed=5)
     
     # ਬਾਕੀ 5 ਖ਼ਬਰਾਂ ਅਗਲੇ ਟੌਪਿਕਸ ਵਿੱਚੋਂ ਲਓ ਤਾਂ ਜੋ ਕੁੱਲ 10 ਪੂਰੀਆਂ ਹੋ ਜਾਣ
     if len(news) < 10:
         print(f"Fetching remaining news for {category}...")
-        safe_wait(5)
+        safe_wait(10)
         news2 = call_ai(category, topics[12:25], count_needed=5)
         seen_titles = set(n.get('title', '') for n in news)
         for n in news2:
@@ -225,11 +224,11 @@ def build_section(category, rss_list, output_file):
 
 def main():
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
-    safe_wait(5)
+    safe_wait(10)
     build_section("india", RSS_INDIA, "today_india.json")
-    safe_wait(5)
+    safe_wait(10)
     build_section("world", RSS_WORLD, "today_world.json")
-    print("\nSab ho gaya! 3 files:")
+    print("\nSab ho gaya! 3 files updated:")
     print("- today_punjab.json (10 news)")
     print("- today_india.json (10 news)")
     print("- today_world.json (10 news)")
