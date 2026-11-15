@@ -6,7 +6,7 @@ import random
 import re
 from google import genai
 
-# --- 1. API KEY FROM GITHUB SECRETS ---
+# --- 1. API KEY FROM 【entity-GITHUB¦canonical_name=GitHub】 SECRETS ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not GEMINI_API_KEY:
     print("ERROR: GEMINI_API_KEY not found!")
@@ -14,7 +14,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS - LITE PEHLA, 3.8 AKHAR TE ---
+# --- 2. MODELS - LITE FIRST, 3.8 LAST ---
 MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
@@ -51,20 +51,20 @@ RSS_WORLD = [
 # --- 4. CATEGORY RULES ---
 CATEGORY_RULES = {
     "punjab": {
-        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc). If news mentions Punjab even a little, INCLUDE it.",
-        "blocked": "DO NOT include pure Delhi / Mumbai / World news where Punjab is not mentioned at all. But DO NOT reject Punjab news just because it also mentions India.",
+        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities. If news mentions Punjab even a little, INCLUDE it.",
+        "blocked": "DO NOT include pure Delhi / Mumbai / World news where Punjab is not mentioned at all.",
     },
     "india": {
-        "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government. Delhi, Mumbai, UP, Bihar etc are allowed. If news mentions India, INCLUDE it.",
-        "blocked": "DO NOT include Punjab-only local news (Punjab village, Punjab local crime) and DO NOT include pure World news.",
+        "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government. Delhi, Mumbai, UP, Bihar etc are allowed.",
+        "blocked": "DO NOT include Punjab-only local news and DO NOT include pure World news.",
     },
     "world": {
         "allowed": "ONLY news that happened OUTSIDE India. USA, UK, China, Pakistan, Russia, Ukraine, etc.",
-        "blocked": "DO NOT include Punjab news. DO NOT include India news. Even if India news mentions USA, if main event is in India, REJECT it.",
+        "blocked": "DO NOT include Punjab news. DO NOT include India news.",
     }
 }
 
-# --- 5. TRENDING TOPICS - FIXED GROUPING ---
+# --- 5. TRENDING TOPICS ---
 def get_trending_topics(rss_list):
     all_titles = []
     for url in rss_list:
@@ -77,11 +77,7 @@ def get_trending_topics(rss_list):
         except Exception as e:
             print(f"RSS Failed: {url} - {e}")
             continue
-
-    print(f"Total headlines collected: {len(all_titles)}")
-
-    # Grouping FIX: Pehle wali galti - 4 shabda naal group karna band
-    # Hun har title nu alag rakho, duplicate hi hatao
+    print(f"Total headlines: {len(all_titles)}")
     topics = []
     seen = set()
     for title in all_titles:
@@ -89,26 +85,21 @@ def get_trending_topics(rss_list):
         if low in seen:
             continue
         seen.add(low)
-        # Count karo - eh topic kinniya feeds vich aaya?
         count = 0
         for t2 in all_titles:
-            # Je 60% shabad milde ne ta same topic
             w1 = set(re.findall(r'\w+', title.lower()))
             w2 = set(re.findall(r'\w+', t2.lower()))
             if w1 and w2 and len(w1 & w2) / max(len(w1), 1) > 0.5:
                 count += 1
         topics.append({"count": count, "titles": [title]})
-    
-    # Trending wale pehla
     topics = sorted(topics, key=lambda x: x["count"], reverse=True)
     return topics[:25]
 
-# --- 6. SAFE WAIT ---
 def safe_wait(seconds=30):
-    print(f"Waiting {seconds} sec to avoid RPM limit...")
+    print(f"Waiting {seconds} sec...")
     time.sleep(seconds)
 
-# --- 7. AI CALL WITH FALLBACK + GAP ---
+# --- 6. AI CALL - PROMPT FULL ENGLISH ---
 def call_ai(category, topics):
     titles_text = ""
     for t in topics:
@@ -117,52 +108,62 @@ def call_ai(category, topics):
     rules = CATEGORY_RULES[category]
 
     prompt = f"""
-    You are a professional Punjabi news editor and analyst.
+    You are a senior Punjabi journalist, not a robot. You tell news like a story.
 
     INPUT:
-    Below are news headlines from Hindi and English RSS feeds for category: {category}.
+    Headlines from Hindi and English RSS feeds for category: {category}.
 
-    STRICT CATEGORY FILTER:
+    CATEGORY FILTER:
     ALLOWED: {rules['allowed']}
     BLOCKED: {rules['blocked']}
 
-    TASK - READ CAREFULLY:
-    1. You MUST return EXACTLY 10 news items. Not 1, Not 2, Not 5. EXACTLY 10.
-    2. If after filtering you have only 2-3 news, then take remaining from headlines list even if less trending.
-    3. DO NOT reject a news just because it is slightly related to another category. If it mentions {category} even a little, INCLUDE it.
-    4. If still less than 10, split one big topic into 2-3 separate news. Example: Punjab Government news -> 1. Government announcement, 2. Opposition reaction, 3. Public reaction.
-    5. NEVER return less than 10. Empty list is NOT allowed.
-    6. Rank by RSS count. Higher count = Higher trending = Top rank.
+    TASK:
+    1. You MUST return EXACTLY 10 news items. Not 1, Not 2. EXACTLY 10.
+    2. If after filtering you have less, take remaining from headlines even if less trending.
+    3. DO NOT reject news just because it is slightly related to another category.
+    4. If still less than 10, split one big topic into 2-3 separate news.
+    5. Rank by RSS count. Higher count = Higher trending.
 
-    TITLE RULE - VERY IMPORTANT:
-    - Title must be SHORT, CRISP, like a newspaper headline.
-    - MAX 8-10 words only. MAX 60 characters.
-    - NEVER write a long sentence as title.
-    - WRONG: "2027 diyan chona to pehla Punjab sarkar da vadda daa: naujawan layi quiz mukable te tubewell load regularization vich rahat" (Too long)
-    - CORRECT: "ਪੰਜਾਬ ਸਰਕਾਰ ਦਾ ਵੱਡਾ ਦਾਅ" (Short)
-    - CORRECT: "ਟਿਊਬਵੈੱਲ ਲੋਡ ਵਿੱਚ ਰਾਹਤ" (Short)
-    - If topic has 2 parts, pick ONLY main one for title. Details will go in points.
+    TITLE RULE:
+    - Title must be SHORT, CRISP, newspaper headline.
+    - MAX 8-10 words, MAX 60 characters.
+    - WRONG: "2027 elections Punjab government big claim for youth quiz competition and tubewell load regularization relief"
+    - CORRECT: Short headline like "Big Claim of Punjab Government"
+    - Pick ONLY main part for title. Details go in points.
 
-    OUTPUT STYLE - POINTS, NOT ESSAY:
-    - Do NOT write a long paragraph essay.
-    - Write each news as 5-6 SHORT BULLET POINTS.
-    - Each point max 1-2 lines.
-    - Total for one news = around 500-700 words, but divided into points.
-    - Points must cover:
-      Point 1: Main News - What happened?
-      Point 2: Origin - where it get started and why
-      Point 3: Controversy - What other controversies are linked to this?
-      Point 4: CURRENT STATUS TODAY - Latest update?
-      Point 5: RELATED - what is happening in other places related to this topic? Example: If Modi inaugurated Metro, tell Metro status in other cities. Successful or not? NOTE: Related must stay inside SAME category only.
-      Point 6: IMPACT - BENEFIT of this
-      Point 7: IMPACT - HARM / LOSS of this
-      Point 8: DATA & STATISTICS - If you know real numbers, include them. If you do not know, do NOT invent fake numbers. Write "official figures not yet available".
+    WRITING STYLE - VERY IMPORTANT, THIS IS THE MAIN RULE:
+    - Do NOT write like a robot, exam notes, government report, or dry list.
+    - Write like a Punjabi journalist telling a story to a friend in a village chaupal.
+    - Each point must be 2-3 lines, connected, with feeling, NOT 1 dry line.
+    - Use simple, spoken Punjabi words that people use in daily life.
+    - Add human touch: What did people say? What did family say? What did police / government say? Use quotes like "People are saying...", "Family says..."
+    - Start with a story hook, like a film start. Reader should want to read next point.
+    - Points should flow like a story, not like separate disconnected bullets.
+    - First point = Story start. Last point = What will happen next? Leave reader thinking.
+    - Do NOT repeat dry labels like "Main News:", "Current Status:" again and again.
+    - Use natural headings: "What happened?", "What are people saying?", "Where did this issue start?"
+
+    EXAMPLE - WRONG (Dry, No Taste):
+    "Point 1: A youth died in Punjab."
+
+    EXAMPLE - CORRECT (Story Style, Tasty to Read):
+    "A heart-shaking incident has come to light in Punjab. A smiling youth suddenly... The whole village is in shock, family is crying badly, and people are asking - are food items not safe anymore?"
+
+    POINTS STRUCTURE - 8 POINTS, STORY STYLE:
+    Point 1 - Story Opening: Start with a story hook, 2-3 lines, emotionally engaging. What happened? Set the scene like a film opening.
+    Point 2 - What Happened? How Did It Happen?: Full story, step by step, with quotes from people. Who is involved? Who said what? Victim, accused, government, opposition.
+    Point 3 - Origin: Where Did This Issue Start? When did it start for the first time? Who started it? Where was it first raised? What is the background history?
+    Point 4 - Controversy: What is the controversy linked to this topic? What does one side say, what does the other side say? Who is supporting, who is opposing? What is the court / government / opposition saying? Where is the fight?
+    Point 5 - Related Developments Elsewhere: What is happening on the same topic in other places? Example: If Modi inaugurated Metro, tell Metro status in other cities. Is it successful there or not? NOTE: Related must stay inside SAME category only.
+    Point 6 - Impact On People: What will be the benefit? What will be the harm / loss? What impact on common people, farmers, youth, businessmen? Explain with story, not with dry list.
+    Point 7 - Data And Statistics: Real numbers - how many people, how much money, how many percent? If you do not know exact data, do NOT invent fake numbers. Write "official figures not yet available".
+    Point 8 - What Will Happen Next? Future: What can happen next? What will government do next? When is next hearing / decision? What should people do now?
 
     LANGUAGE RULES:
-    - Use ONLY Gurmukhi script. NEVER use Roman Punjabi.
-    - Translate names: Narendra Modi -> ਨਰਿੰਦਰ ਮੋਦੀ, Donald Trump -> ਡੋਨਲਡ ਟਰੰਪ
+    - Output MUST be in ONLY Gurmukhi script. NEVER use Roman Punjabi.
+    - Translate names: Narendra Modi -> Narendra Modi in Gurmukhi, Donald Trump -> Donald Trump in Gurmukhi.
     - Use Punjabi words, not Hindi words.
-    - Return ONLY valid JSON. No markdown, no explanation.
+    - Return ONLY valid JSON. No markdown.
 
     OUTPUT JSON FORMAT:
     [
@@ -170,12 +171,14 @@ def call_ai(category, topics):
         "category": "{category}",
         "title": "MAX 8-10 words, MAX 60 chars, short headline in Gurmukhi",
         "points": [
-          "Point 1 - Main News in Gurmukhi",
-          "Point 2 - Current Status Today in Gurmukhi",
-          "Point 3 - Related Developments in Gurmukhi",
-          "Point 4 - Benefit in Gurmukhi",
-          "Point 5 - Harm / Loss in Gurmukhi",
-          "Point 6 - Statistics in Gurmukhi"
+          "Point 1 - Story Opening, 2-3 lines story in Gurmukhi",
+          "Point 2 - What happened, full story with quotes in Gurmukhi",
+          "Point 3 - Origin, where did issue start in Gurmukhi",
+          "Point 4 - Controversy, who is saying what in Gurmukhi",
+          "Point 5 - Related developments elsewhere in Gurmukhi",
+          "Point 6 - Impact on people, benefit / harm in Gurmukhi",
+          "Point 7 - Data and statistics in Gurmukhi",
+          "Point 8 - What will happen next in Gurmukhi"
         ],
         "source": "Source name",
         "trending_score": 5
@@ -197,22 +200,16 @@ def call_ai(category, topics):
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
             if i < len(MODELS) - 1:
-                wait_time = 30 + random.randint(0, 10)
-                safe_wait(wait_time)
+                safe_wait(30 + random.randint(0, 10))
             continue
-
     print(f"All models failed for {category}")
     return []
 
-# --- 8. BUILD ONE SECTION -> ONE FILE - 10 PAKKI ---
+# --- 7. BUILD SECTION - 10 PAKKI ---
 def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
-    print(f"Found {len(topics)} topics for {category}")
-
     news = call_ai(category, topics)
-
-    # FIX: Je 10 to ghat aaiya, ta fer try karo bharne lai
     if len(news) < 10:
         print(f"Only {len(news)} news for {category}, trying again to fill to 10...")
         safe_wait(10)
@@ -225,11 +222,8 @@ def build_section(category, rss_list, output_file):
             if len(news) >= 10:
                 break
         print(f"After 2nd try, total: {len(news)}")
-
-    # Category filter + Sirf 10
     news = [n for n in news if n.get("category", "").lower() == category.lower()]
     news = news[:10]
-
     if news:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(news, f, ensure_ascii=False, indent=2)
@@ -238,17 +232,13 @@ def build_section(category, rss_list, output_file):
         print(f"Failed {category}, old {output_file} will remain")
     return news
 
-# --- 9. MAIN ---
 def main():
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
     safe_wait(30)
-
     build_section("india", RSS_INDIA, "today_india.json")
     safe_wait(30)
-
     build_section("world", RSS_WORLD, "today_world.json")
-
-    print("\nSab ho gaya! 3 files ban gayian:")
+    print("\nSab ho gaya! 3 files:")
     print("- today_punjab.json (10 news)")
     print("- today_india.json (10 news)")
     print("- today_world.json (10 news)")
