@@ -24,7 +24,9 @@ jobs:
         run: pip install feedparser google-genai
 
       - name: Run main.py
-        run: python main.py
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python -u main.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
