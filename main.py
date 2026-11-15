@@ -15,7 +15,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS ---
+# --- 2. MODELS - Sirf 3, jo pakke chalde ne ---
 MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
@@ -25,7 +25,7 @@ MODELS = [
     "gemini-3.8-flash",
 ]
 
-# --- 3. RSS LINKS (Same as yours) ---
+# --- 3. RSS LINKS ---
 RSS_PUNJAB = [
     "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
@@ -47,7 +47,7 @@ RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
 ]
 
-# --- 4. CATEGORY RULES (Same as yours) ---
+# --- 4. CATEGORY RULES ---
 CATEGORY_RULES = {
     "punjab": {
         "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities.",
@@ -63,7 +63,7 @@ CATEGORY_RULES = {
     }
 }
 
-# --- 5. NEW: SYSTEM PROMPT - Yeh sabse bada fix hai ---
+# --- 5. SYSTEM PROMPT - MIX TONE ---
 SYSTEM_PROMPT = """
 You are a 35-year-old Punjabi journalist from Ludhiana. You are sitting in a village chaupal, telling news to your friend. You are NOT an anchor, NOT a government officer.
 
@@ -113,11 +113,11 @@ def get_trending_topics(rss_list):
     topics = sorted(topics, key=lambda x: x["count"], reverse=True)
     return topics[:25]
 
-def safe_wait(seconds=30):
+def safe_wait(seconds=5):
     print(f"Waiting {seconds} sec...")
     time.sleep(seconds)
 
-# --- 6. AI CALL - FIXED ---
+# --- 6. AI CALL - FAST + MIX TONE ---
 def call_ai(category, topics):
     titles_text = ""
     for t in topics:
@@ -188,7 +188,7 @@ def call_ai(category, topics):
                     system_instruction=SYSTEM_PROMPT,
                     temperature=0.8,
                     top_p=0.95,
-                    max_output_tokens=4000,
+                    max_output_tokens=2500,
                 )
             )
             text = resp.text.strip().replace("```json", "").replace("```", "").strip()
@@ -198,7 +198,7 @@ def call_ai(category, topics):
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
             if i < len(MODELS) - 1:
-                safe_wait(30 + random.randint(0, 10))
+                safe_wait(5)
             continue
     print(f"All models failed for {category}")
     return []
@@ -207,9 +207,10 @@ def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
     news = call_ai(category, topics)
-    if len(news) < 10:
+    # FIX: Sirf tabhi dobara try karo jab 7 se kam news aayi hon
+    if len(news) < 7:
         print(f"Only {len(news)} news for {category}, trying again to fill to 10...")
-        safe_wait(10)
+        safe_wait(5)
         news2 = call_ai(category, topics)
         seen_titles = set(n.get('title', '') for n in news)
         for n in news2:
@@ -231,9 +232,9 @@ def build_section(category, rss_list, output_file):
 
 def main():
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
-    safe_wait(30)
+    safe_wait(5)
     build_section("india", RSS_INDIA, "today_india.json")
-    safe_wait(30)
+    safe_wait(5)
     build_section("world", RSS_WORLD, "today_world.json")
     print("\nSab ho gaya! 3 files:")
     print("- today_punjab.json (10 news)")
