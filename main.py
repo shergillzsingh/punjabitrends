@@ -2,8 +2,8 @@ import os
 import feedparser
 import json
 import time
-import random
 import re
+from datetime import datetime
 from google import genai
 from google.genai import types
 
@@ -15,14 +15,10 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS - Sirf 3, jo pakke chalde ne ---
+# --- 2. MODELS (ਸਿਰਫ਼ ਅਸਲੀ ਅਤੇ ਸਹੀ ਮਾਡਲ) ---
 MODELS = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
-    "gemini-3-flash",
     "gemini-2.5-flash",
-    "gemini-3.8-flash",
+    "gemini-2.5-flash-lite",
 ]
 
 # --- 3. RSS LINKS ---
@@ -50,7 +46,7 @@ RSS_WORLD = [
 # --- 4. CATEGORY RULES ---
 CATEGORY_RULES = {
     "punjab": {
-        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities.",
+        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab politics, Punjab cities.",
         "blocked": "DO NOT include pure Delhi / Mumbai / World news where Punjab is not mentioned at all.",
     },
     "india": {
@@ -63,24 +59,12 @@ CATEGORY_RULES = {
     }
 }
 
-# --- 5. SYSTEM PROMPT - MIX TONE ---
+# --- 5. SYSTEM PROMPT (ਡੂੰਘਾਈ ਵਾਲੀ ਪੱਤਰਕਾਰੀ + ਸਰਲ ਪੰਜਾਬੀ) ---
 SYSTEM_PROMPT = """
-You are a 35-year-old Punjabi journalist from Ludhiana. You are sitting in a village chaupal, telling news to your friend. You are NOT an anchor, NOT a government officer.
-
-LANGUAGE: Only simple spoken Punjabi in Gurmukhi script. Words like people use in Muktsar / Ludhiana. No Roman Punjabi. No Hindi words.
-
-TONE: 70% Story, 30% light roast. If news is sad like death / attack, then 100% serious, no roast.
-
-STORY RULE - VERY IMPORTANT:
-Write 8 points, but they must read like ONE continuous story, not 8 separate news. End of Point 1 must connect to start of Point 2. Use connecting words like "ਉਸ ਤੋਂ ਬਾਅਦ...", "ਇਹ ਸੁਣ ਕੇ...", "ਪਰ ਅਸਲ ਕਹਾਣੀ ਤਾਂ..."
-
-Each point = 2-3 lines, with feeling. Add quotes in every point: "Family says...", "People are saying...", "Police says..."
-
-WRONG - DO NOT WRITE LIKE THIS:
-"Point 1: Punjab vich ik naujawan di maut ho gayi. Police jaanch kar rahi hai."
-
-CORRECT - WRITE LIKE THIS IN GURMUKHI:
-"ਸੋਮਵਾਰ ਸਵੇਰੇ ਪਿੰਡ ਵਿੱਚ ਅਜੇ ਲੋਕ ਚਾਹ ਪੀ ਹੀ ਰਹੇ ਸਨ ਕਿ ਇੱਕ ਫੋਨ ਆਇਆ। ਦੂਜੇ ਪਾਸੇ ਤੋਂ ਆਵਾਜ਼ ਆਈ - 'ਤੁਹਾਡਾ ਮੁੰਡਾ...' ਤੇ ਉਸ ਤੋਂ ਬਾਅਦ ਪੂਰੇ ਘਰ ਵਿੱਚ ਰੌਲਾ ਪੈ ਗਿਆ। ਮਾਂ ਕਹਿੰਦੀ ਹੈ - 'ਮੇਰਾ ਪੁੱਤ ਤਾਂ ਸਵੇਰੇ ਹੱਸਦਾ ਹੋਇਆ ਗਿਆ ਸੀ।'"
+ਤੁਸੀਂ ਇੱਕ ਤਜਰਬੇਕਾਰ ਪੰਜਾਬੀ ਖੋਜੀ ਪੱਤਰਕਾਰ (Investigative Journalist) ਅਤੇ ਵਿਸ਼ਲੇਸ਼ਕ ਹੋ।
+ਭਾਸ਼ਾ: ਸਿਰਫ਼ ਸ਼ੁੱਧ, ਸਰਲ ਅਤੇ ਬੋਲਚਾਲ ਵਾਲੀ ਪੰਜਾਬੀ (ਗੁਰਮੁਖੀ ਲਿਪੀ)। ਕੋਈ ਅੰਗਰੇਜ਼ੀ ਜਾਂ ਹਿੰਦੀ ਸ਼ਬਦ ਨਾ ਵਰਤੋ (ਸਿਰਫ਼ ਲੋੜ ਪੈਣ 'ਤੇ ਖਾਸ ਨਾਮ ਜਿਵੇਂ ED, SIT, NATO ਲਿਖ ਸਕਦੇ ਹੋ)।
+ਅੰਦਾਜ਼: ਗੰਭੀਰ, ਤੱਥਾਂ 'ਤੇ ਆਧਾਰਿਤ, ਪਰ ਆਮ ਲੋਕਾਂ ਨੂੰ ਆਸਾਨੀ ਨਾਲ ਸਮਝ ਆਉਣ ਵਾਲੀ ਕਹਾਣੀ ਵਰਗੀ ਸ਼ੈਲੀ। ਹਰ ਪੁਆਇੰਟ ਪਿਛਲੇ ਪੁਆਇੰਟ ਨਾਲ ਜੁੜਿਆ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।
+ਅੰਦਰੂਨੀ ਕੋਟਸ: JSON ਟੁੱਟਣ ਤੋਂ ਬਚਾਉਣ ਲਈ ਪੰਜਾਬੀ ਵਾਕਾਂ ਦੇ ਅੰਦਰ ਡਬਲ ਕੋਟਸ (") ਦੀ ਥਾਂ ਸਿੰਗਲ ਕੋਟਸ (') ਵਰਤੋ।
 """
 
 def get_trending_topics(rss_list):
@@ -90,12 +74,12 @@ def get_trending_topics(rss_list):
             feed = feedparser.parse(url)
             print(f"RSS OK: {url} - Found {len(feed.entries)} entries")
             for entry in feed.entries[:25]:
-                if entry.title.strip():
+                if hasattr(entry, 'title') and entry.title.strip():
                     all_titles.append(entry.title.strip())
         except Exception as e:
             print(f"RSS Failed: {url} - {e}")
             continue
-    print(f"Total headlines: {len(all_titles)}")
+            
     topics = []
     seen = set()
     for title in all_titles:
@@ -104,12 +88,13 @@ def get_trending_topics(rss_list):
             continue
         seen.add(low)
         count = 0
+        w1 = set(re.findall(r'\w+', low))
         for t2 in all_titles:
-            w1 = set(re.findall(r'\w+', title.lower()))
             w2 = set(re.findall(r'\w+', t2.lower()))
             if w1 and w2 and len(w1 & w2) / max(len(w1), 1) > 0.5:
                 count += 1
         topics.append({"count": count, "titles": [title]})
+        
     topics = sorted(topics, key=lambda x: x["count"], reverse=True)
     return topics[:25]
 
@@ -117,8 +102,18 @@ def safe_wait(seconds=5):
     print(f"Waiting {seconds} sec...")
     time.sleep(seconds)
 
-# --- 6. AI CALL - FAST + MIX TONE ---
-def call_ai(category, topics):
+def extract_json(text):
+    """AI ਦੇ ਜਵਾਬ ਵਿੱਚੋਂ ਸੁਰੱਖਿਅਤ ਤਰੀਕੇ ਨਾਲ JSON ਕੱਢਣ ਲਈ"""
+    text = text.strip()
+    # ਜੇਕਰ ```json ... ``` ਲੱਗਾ ਹੋਵੇ ਤਾਂ ਹਟਾਓ
+    match = re.search(r'\[.*\]', text, re.DOTALL)
+    if match:
+        text = match.group(0)
+    return json.loads(text)
+
+# --- 6. AI CALL ---
+def call_ai(category, topics, count_needed=5):
+    today_date = datetime.now().strftime("%d %B %Y")
     titles_text = ""
     for t in topics:
         titles_text += f"\n- Topic (Appeared in {t['count']} feeds): " + " | ".join(t['titles'][:2])
@@ -126,50 +121,47 @@ def call_ai(category, topics):
     rules = CATEGORY_RULES[category]
 
     prompt = f"""
+    Today's Date: {today_date}
     INPUT Headlines for category: {category}.
+    
     CATEGORY FILTER:
     ALLOWED: {rules['allowed']}
     BLOCKED: {rules['blocked']}
 
     TASK:
-    1. Return EXACTLY 10 news items.
-    2. Rank by RSS count. Higher count = Higher trending.
-    3. If after filtering you have less, split one big topic into 2-3 separate news.
+    1. Pick the top {count_needed} MOST IMPORTANT trending topics from the list below.
+    2. Use Google Search to get the LATEST facts, numbers, dates, and controversies about each topic.
+    3. Return EXACTLY {count_needed} news items in valid JSON array format.
 
     TITLE RULE:
-    - Title SHORT, CRISP, newspaper headline.
-    - MAX 8-10 words, MAX 60 characters.
-    - WRONG: "2027 elections Punjab government big claim for youth quiz competition and tubewell load regularization relief"
-    - CORRECT: "ਪੰਜਾਬ ਸਰਕਾਰ ਦਾ ਵੱਡਾ ਦਾਅਵਾ"
+    - Short, crisp newspaper headline in Gurmukhi (MAX 8-10 words, MAX 60 chars).
 
-    POINTS STRUCTURE - 8 POINTS, BUT ONE STORY:
-    Point 1 - Story Opening: Start like a film. 2-3 lines scene. Do NOT start with date.
-    Point 2 - What Happened? Full story step-by-step, with quotes. Who said what?
-    Point 3 - Origin: Where did this issue start? First time when? Background in story style.If it concerns a person, provide information about that person's origin.
-    Point 4 - Controversy: One side says what? Other side says what? Court / Govt / Opposition / people saying what? What controversy currently surrounds this subject, and—if there have been any previous controversies—what were they? What was the outcome of those controversies?.
-    Point 5 - Related Developments: SAME category only. What else is happening elsewhere in relation to this subject? What has happened regarding this matter in the past? Is this a global issue, or is it just a minor one—or, to put it another way, how significant is this issue?.
-    Point 6 - Impact On People: Benefit / Harm with one small story of a common person - farmer, youth, mother. Not dry list.
-    Point 7 - Data: 2-3 real numbers only. If new data is not available, present older data related to the subject—including the dates—detailing the extent of the loss, the actions taken, the outcomes achieved, or whether the matter is still pending.
-    Point 8 - What Will Happen Next? Next hearing / decision / date? End with one question for reader. What decisions might be taken in the future regarding this? What decisions have been taken in the past? How successful have they been, and to what extent have they failed?
+    POINTS STRUCTURE - 8 DEEP & CONNECTED POINTS (Write 3-4 detailed lines per point):
+    Point 1 - ਅੱਜ ਦੀ ਤਾਜ਼ਾ ਸਥਿਤੀ (Current Update): ਖ਼ਬਰ ਦੀ ਸ਼ੁਰੂਆਤ ਕਹਾਣੀ ਵਾਂਗ ਕਰੋ। ਅੱਜ ਦੀ ਤਰੀਕ ਤੱਕ ਇਸ ਮਾਮਲੇ ਵਿੱਚ ਕੀ ਨਵਾਂ ਵਾਪਰਿਆ ਹੈ? ਕਿਸ ਨੇ ਕੀ ਬਿਆਨ ਦਿੱਤਾ?
+    Point 2 - ਪੂਰਾ ਘਟਨਾਕ੍ਰਮ (What Happened): ਮਾਮਲਾ ਸ਼ੁਰੂ ਕਿਵੇਂ ਹੋਇਆ? ਕਦੋਂ ਅਤੇ ਕਿੱਥੇ ਵਾਪਰਿਆ? ਪੂਰਾ ਪਿਛੋਕੜ ਦੱਸੋ। ਜੇ ਕਿਸੇ ਵਿਅਕਤੀ ਬਾਰੇ ਹੈ ਤਾਂ ਉਸ ਦਾ ਸਿਆਸੀ/ਸਮਾਜਿਕ ਪਿਛੋਕੜ ਦੱਸੋ।
+    Point 3 - ਪੰਜਾਬ, ਭਾਰਤ ਅਤੇ ਦੁਨੀਆਂ ਪੱਧਰ 'ਤੇ ਸਥਿਤੀ (Regional to Global Context): ਇਸ ਮੁੱਦੇ ਜਾਂ ਚੀਜ਼ ਦੀ ਪੰਜਾਬ ਵਿੱਚ ਕੀ ਸਥਿਤੀ ਹੈ, ਪੂਰੇ ਭਾਰਤ ਵਿੱਚ ਕੀ ਹਾਲ ਹੈ, ਅਤੇ ਦੁਨੀਆਂ ਜਾਂ ਪ੍ਰਵਾਸੀ ਪੰਜਾਬੀਆਂ ਵਿੱਚ ਇਸ ਦਾ ਕੀ ਅਸਰ ਹੈ?
+    Point 4 - ਅੰਕੜੇ ਅਤੇ ਤੱਥ (Data & Statistics): ਅਸਲੀ ਅੰਕੜੇ ਦਿਓ—ਜਿਵੇਂ ਬਜਟ, ਵੋਟਾਂ ਦਾ ਫ਼ਰਕ, ਨੁਕਸਾਨ ਦੀ ਰਕਮ, ਤਰੀਕਾਂ, ਜਾਂ ਕਿੰਨੇ ਲੋਕ ਪ੍ਰਭਾਵਿਤ ਹੋਏ।
+    Point 5 - ਫਾਇਦੇ / ਸਕਾਰਾਤਮਕ ਪੱਖ (Benefits): ਇਸ ਕਦਮ, ਨੀਤੀ ਜਾਂ ਵਿਅਕਤੀ ਦੇ ਕੰਮਾਂ ਨਾਲ ਆਮ ਲੋਕਾਂ, ਕਿਸਾਨਾਂ ਜਾਂ ਨੌਜਵਾਨਾਂ ਨੂੰ ਕੀ ਫਾਇਦਾ ਹੋਇਆ ਹੈ?
+    Point 6 - ਨੁਕਸਾਨ / ਕਮੀਆਂ (Drawbacks & Impact): ਇਸ ਦਾ ਨਕਾਰਾਤਮਕ ਅਸਰ ਕੀ ਹੈ? ਆਮ ਆਦਮੀ ਦੀ ਜ਼ਿੰਦਗੀ 'ਤੇ ਕੀ ਬੋਝ ਪਿਆ ਹੈ?
+    Point 7 - ਵਿਵਾਦ / ਕੰਟ੍ਰੋਵਰਸੀ (Controversies): ਇਸ ਵਿਸ਼ੇ ਨਾਲ ਜੁੜੇ ਛੋਟੇ ਪੱਧਰ ਤੋਂ ਲੈ ਕੇ ਵੱਡੇ ਪੱਧਰ ਤੱਕ ਦੇ ਸਾਰੇ ਵਿਵਾਦ ਦੱਸੋ। ਵਿਰੋਧੀ ਧਿਰ, ਅਦਾਲਤ ਜਾਂ ਲੋਕ ਕੀ ਇਲਜ਼ਾਮ ਲਾ ਰਹੇ ਹਨ ਅਤੇ ਦੂਜੀ ਧਿਰ ਦੀ ਕੀ ਸਫ਼ਾਈ ਹੈ?
+    Point 8 - ਅੱਗੇ ਕੀ ਹੋਵੇਗਾ (What Next): ਭਵਿੱਖ ਵਿੱਚ ਇਸ ਦਾ ਕੀ ਨਤੀਜਾ ਨਿਕਲ ਸਕਦਾ ਹੈ? ਅਗਲੀ ਤਰੀਕ ਜਾਂ ਫ਼ੈਸਲਾ ਕੀ ਹੈ? ਅੰਤ ਵਿੱਚ ਪਾਠਕਾਂ ਲਈ ਇੱਕ ਸਵਾਲ ਛੱਡੋ।
 
-    OUTPUT: ONLY valid JSON. No markdown. All text in Gurmukhi only.
-
-    OUTPUT JSON FORMAT:
+    OUTPUT ONLY VALID JSON (No extra text before or after JSON):
     [
       {{
         "category": "{category}",
-        "title": "MAX 8-10 words, MAX 60 chars, short headline in Gurmukhi",
+        "title": "ਛੋਟਾ ਸਿਰਲੇਖ ਗੁਰਮੁਖੀ ਵਿੱਚ",
         "points": [
-          "Point 1 story in Gurmukhi, 2-3 lines",
-          "Point 2 story in Gurmukhi, 2-3 lines, with quotes",
-          "Point 3 origin story in Gurmukhi",
-          "Point 4 controversy in Gurmukhi",
-          "Point 5 related in SAME category in Gurmukhi",
-          "Point 6 impact with small story in Gurmukhi",
-          "Point 7 data in Gurmukhi",
-          "Point 8 what next + question in Gurmukhi"
+          "Point 1 text...",
+          "Point 2 text...",
+          "Point 3 text...",
+          "Point 4 text...",
+          "Point 5 text...",
+          "Point 6 text...",
+          "Point 7 text...",
+          "Point 8 text..."
         ],
-        "source": "Source name",
+        "source": "News Source Name",
         "trending_score": 5
       }}
     ]
@@ -186,13 +178,12 @@ def call_ai(category, topics):
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
-                    temperature=0.8,
-                    top_p=0.95,
-                    max_output_tokens=8000,
+                    tools=[{"google_search": {}}],  # ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅੰਕੜਿਆਂ ਲਈ
+                    temperature=0.7,
+                    max_output_tokens=32000,
                 )
             )
-            text = resp.text.strip().replace("```json", "").replace("```", "").strip()
-            result = json.loads(text)
+            result = extract_json(resp.text)
             print(f"SUCCESS with {model} for {category} - Got {len(result)} news")
             return result
         except Exception as e:
@@ -206,22 +197,24 @@ def call_ai(category, topics):
 def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
-    news = call_ai(category, topics)
-    # FIX: Sirf tabhi dobara try karo jab 7 se kam news aayi hon
+    
+    # ਪਹਿਲੀ ਵਾਰ 5 ਖ਼ਬਰਾਂ ਲਓ (ਤਾਂ ਜੋ ਡਿਟੇਲ ਪੂਰੀ ਡੂੰਘੀ ਆਵੇ ਤੇ ਟੋਕਨ ਨਾ ਕੱਟੇ ਜਾਣ)
+    news = call_ai(category, topics[:12], count_needed=5)
+    
+    # ਬਾਕੀ 5 ਖ਼ਬਰਾਂ ਅਗਲੇ ਟੌਪਿਕਸ ਵਿੱਚੋਂ ਲਓ ਤਾਂ ਜੋ ਕੁੱਲ 10 ਪੂਰੀਆਂ ਹੋ ਜਾਣ
     if len(news) < 10:
-        print(f"Only {len(news)} news for {category}, trying again to fill to 10...")
+        print(f"Fetching remaining news for {category}...")
         safe_wait(5)
-        news2 = call_ai(category, topics)
+        news2 = call_ai(category, topics[12:25], count_needed=5)
         seen_titles = set(n.get('title', '') for n in news)
         for n in news2:
             if n.get('title', '') not in seen_titles:
                 news.append(n)
                 seen_titles.add(n.get('title', ''))
-            if len(news) >= 10:
-                break
-        print(f"After 2nd try, total: {len(news)}")
+                
     news = [n for n in news if n.get("category", "").lower() == category.lower()]
     news = news[:10]
+    
     if news:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(news, f, ensure_ascii=False, indent=2)
