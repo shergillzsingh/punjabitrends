@@ -147,14 +147,16 @@ def call_ai(category, topics):
     - Do NOT write a long paragraph essay.
     - Write each news as 5-6 SHORT BULLET POINTS.
     - Each point max 1-2 lines.
-    - Total for one news = around 300-400 words, but divided into points.
+    - Total for one news = around 500-700 words, but divided into points.
     - Points must cover:
-      Point 1: Main News - Ki hoya?
-      Point 2: CURRENT STATUS TODAY - Ajj ki chal reha hai? Latest update?
-      Point 3: RELATED DEVELOPMENTS - Same topic te hor thawan te ki chal reha hai? Example: If Modi inaugurated Metro, tell Metro status in other cities. Successful or not? NOTE: Related must stay inside SAME category only.
-      Point 4: IMPACT - BENEFIT - Fayda ki hai? Kaun nu fayda?
-      Point 5: IMPACT - HARM / LOSS - Nuksan ki hai? Kaun nu nuksan?
-      Point 6: DATA & STATISTICS - If you know real numbers, include them. If you do not know, do NOT invent fake numbers. Write "official figures not yet available".
+      Point 1: Main News - What happened?
+      Point 2: Origin - where it get started and why
+      Point 3: Controversy - What other controversies are linked to this?
+      Point 4: CURRENT STATUS TODAY - Latest update?
+      Point 5: RELATED - what is happening in other places related to this topic? Example: If Modi inaugurated Metro, tell Metro status in other cities. Successful or not? NOTE: Related must stay inside SAME category only.
+      Point 6: IMPACT - BENEFIT of this
+      Point 7: IMPACT - HARM / LOSS of this
+      Point 8: DATA & STATISTICS - If you know real numbers, include them. If you do not know, do NOT invent fake numbers. Write "official figures not yet available".
 
     LANGUAGE RULES:
     - Use ONLY Gurmukhi script. NEVER use Roman Punjabi.
