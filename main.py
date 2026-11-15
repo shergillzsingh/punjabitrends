@@ -15,7 +15,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS (ਸਿਰਫ਼ ਅਸਲੀ ਅਤੇ ਸਹੀ ਮਾਡਲ) ---
+# --- 2. MODELS (ਸਿਰਫ਼ ਅਸਲੀ ਤੇ ਚੱਲਣ ਵਾਲੇ ਮਾਡਲ) ---
 MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
@@ -27,24 +27,23 @@ MODELS = [
 
 # --- 3. RSS LINKS ---
 RSS_PUNJAB = [
-    "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
-    "https://www.ptcnews.tv/rssfeed/punjab",
-    "https://www.bhaskar.com/rss-v1--category-1743.xml",
     "https://publish.tribuneindia.com/state/punjab/feed/",
     "https://feeds.bbci.co.uk/punjabi/rss.xml",
+    "https://www.ptcnews.tv/rssfeed/punjab",
+    "https://www.bhaskar.com/rss-v1--category-1743.xml",
 ]
 RSS_INDIA = [
-    "https://www.bhaskar.com/rss-v1--category-1061.xml",
-    "https://www.navjivanindia.com/stories.rss?section=india",
     "https://www.thehindu.com/news/national/feeder/default.rss",
+    "https://www.bhaskar.com/rss-v1--category-1061.xml",
     "https://indianexpress.com/section/india/feed/",
+    "https://www.navjivanindia.com/stories.rss?section=india",
 ]
 RSS_WORLD = [
-    "https://www.bhaskar.com/rss-v1--category-1125.xml",
-    "https://www.thehindu.com/news/international/feeder/default.rss",
-    "https://indianexpress.com/section/world/feed/",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "https://www.thehindu.com/news/international/feeder/default.rss",
+    "https://www.bhaskar.com/rss-v1--category-1125.xml",
+    "https://indianexpress.com/section/world/feed/",
 ]
 
 # --- 4. CATEGORY RULES ---
@@ -63,7 +62,7 @@ CATEGORY_RULES = {
     }
 }
 
-# --- 5. SYSTEM PROMPT (ਡੂੰਘਾਈ ਵਾਲੀ ਪੱਤਰਕਾਰੀ + ਸਰਲ ਪੰਜਾਬੀ) ---
+# --- 5. SYSTEM PROMPT ---
 SYSTEM_PROMPT = """
 ਤੁਸੀਂ ਇੱਕ ਤਜਰਬੇਕਾਰ ਪੰਜਾਬੀ ਖੋਜੀ ਪੱਤਰਕਾਰ (Investigative Journalist) ਅਤੇ ਵਿਸ਼ਲੇਸ਼ਕ ਹੋ।
 ਭਾਸ਼ਾ: ਸਿਰਫ਼ ਸ਼ੁੱਧ, ਸਰਲ ਅਤੇ ਬੋਲਚਾਲ ਵਾਲੀ ਪੰਜਾਬੀ (ਗੁਰਮੁਖੀ ਲਿਪੀ)। ਕੋਈ ਅੰਗਰੇਜ਼ੀ ਜਾਂ ਹਿੰਦੀ ਸ਼ਬਦ ਨਾ ਵਰਤੋ (ਸਿਰਫ਼ ਲੋੜ ਪੈਣ 'ਤੇ ਖਾਸ ਨਾਮ ਜਿਵੇਂ ED, SIT, NATO ਲਿਖ ਸਕਦੇ ਹੋ)।
@@ -71,43 +70,57 @@ SYSTEM_PROMPT = """
 ਅੰਦਰੂਨੀ ਕੋਟਸ: JSON ਟੁੱਟਣ ਤੋਂ ਬਚਾਉਣ ਲਈ ਪੰਜਾਬੀ ਵਾਕਾਂ ਦੇ ਅੰਦਰ ਡਬਲ ਕੋਟਸ (") ਦੀ ਥਾਂ ਸਿੰਗਲ ਕੋਟਸ (') ਵਰਤੋ।
 """
 
+def clean_html(raw_html):
+    """HTML ਟੈਗਸ ਹਟਾ ਕੇ ਸਾਫ਼ ਟੈਕਸਟ ਕੱਢਣ ਲਈ"""
+    cleanr = re.compile('<.*?>')
+    cleantext = re.sub(cleanr, '', raw_html)
+    return " ".join(cleantext.split())
+
 def get_trending_topics(rss_list):
-    all_titles = []
+    all_entries = []
     for url in rss_list:
         try:
             feed = feedparser.parse(url)
             print(f"RSS OK: {url} - Found {len(feed.entries)} entries")
             for entry in feed.entries[:25]:
-                if hasattr(entry, 'title') and entry.title.strip():
-                    all_titles.append(entry.title.strip())
+                title = entry.get('title', '').strip()
+                summary = clean_html(entry.get('summary', '') or entry.get('description', ''))
+                if title:
+                    all_entries.append({
+                        "title": title,
+                        "summary": summary[:400]  # ਖ਼ਬਰ ਦੀ ਅਸਲੀ ਡਿਟੇਲ (400 ਅੱਖਰਾਂ ਤੱਕ)
+                    })
         except Exception as e:
             print(f"RSS Failed: {url} - {e}")
             continue
             
     topics = []
     seen = set()
-    for title in all_titles:
-        low = title.lower().strip()
+    for item in all_entries:
+        low = item["title"].lower().strip()
         if low in seen:
             continue
         seen.add(low)
         count = 0
         w1 = set(re.findall(r'\w+', low))
-        for t2 in all_titles:
-            w2 = set(re.findall(r'\w+', t2.lower()))
+        for item2 in all_entries:
+            w2 = set(re.findall(r'\w+', item2["title"].lower()))
             if w1 and w2 and len(w1 & w2) / max(len(w1), 1) > 0.5:
                 count += 1
-        topics.append({"count": count, "titles": [title]})
+        topics.append({
+            "count": count,
+            "title": item["title"],
+            "details": item["summary"]
+        })
         
     topics = sorted(topics, key=lambda x: x["count"], reverse=True)
     return topics[:25]
 
-def safe_wait(seconds=10):
+def safe_wait(seconds=12):
     print(f"Waiting {seconds} sec to avoid Rate Limit...")
     time.sleep(seconds)
 
 def extract_json(text):
-    """AI ਦੇ ਜਵਾਬ ਵਿੱਚੋਂ ਸੁਰੱਖਿਅਤ ਤਰੀਕੇ ਨਾਲ JSON ਕੱਢਣ ਲਈ"""
     text = text.strip()
     match = re.search(r'\[.*\]', text, re.DOTALL)
     if match:
@@ -117,23 +130,23 @@ def extract_json(text):
 # --- 6. AI CALL ---
 def call_ai(category, topics, count_needed=5):
     today_date = datetime.now().strftime("%d %B %Y")
-    titles_text = ""
+    news_feed_text = ""
     for t in topics:
-        titles_text += f"\n- Topic (Appeared in {t['count']} feeds): " + " | ".join(t['titles'][:2])
+        news_feed_text += f"\n- HEADLINE (Score {t['count']}): {t['title']}\n  DETAILS FROM NEWS: {t['details']}\n"
 
     rules = CATEGORY_RULES[category]
 
     prompt = f"""
     Today's Date: {today_date}
-    INPUT Headlines for category: {category}.
+    INPUT News Data for category: {category}.
     
     CATEGORY FILTER:
     ALLOWED: {rules['allowed']}
     BLOCKED: {rules['blocked']}
 
     TASK:
-    1. Pick the top {count_needed} MOST IMPORTANT trending topics from the list below.
-    2. Use Google Search to get the LATEST facts, numbers, dates, and controversies about each topic.
+    1. Pick the top {count_needed} MOST IMPORTANT trending news from the list below.
+    2. Combine the provided 'DETAILS FROM NEWS' (for today's latest facts) with your own deep knowledge (for past history, exact numbers/votes/budgets, and old controversies).
     3. Return EXACTLY {count_needed} news items in valid JSON array format.
 
     TITLE RULE:
@@ -169,8 +182,8 @@ def call_ai(category, topics, count_needed=5):
       }}
     ]
 
-    HEADLINES:
-    {titles_text}
+    NEWS FEED DATA:
+    {news_feed_text}
     """
 
     for i, model in enumerate(MODELS):
@@ -181,7 +194,6 @@ def call_ai(category, topics, count_needed=5):
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
-                    tools=[{"google_search": {}}],
                     temperature=0.7,
                     max_output_tokens=32000,
                 )
@@ -192,7 +204,7 @@ def call_ai(category, topics, count_needed=5):
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
             if i < len(MODELS) - 1:
-                safe_wait(10)
+                safe_wait(12)
             continue
     print(f"All models failed for {category}")
     return []
@@ -201,13 +213,11 @@ def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
     
-    # ਪਹਿਲੀ ਵਾਰ 5 ਖ਼ਬਰਾਂ ਲਓ
     news = call_ai(category, topics[:12], count_needed=5)
     
-    # ਬਾਕੀ 5 ਖ਼ਬਰਾਂ ਅਗਲੇ ਟੌਪਿਕਸ ਵਿੱਚੋਂ ਲਓ ਤਾਂ ਜੋ ਕੁੱਲ 10 ਪੂਰੀਆਂ ਹੋ ਜਾਣ
     if len(news) < 10:
         print(f"Fetching remaining news for {category}...")
-        safe_wait(10)
+        safe_wait(12)
         news2 = call_ai(category, topics[12:25], count_needed=5)
         seen_titles = set(n.get('title', '') for n in news)
         for n in news2:
@@ -228,9 +238,9 @@ def build_section(category, rss_list, output_file):
 
 def main():
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
-    safe_wait(10)
+    safe_wait(12)
     build_section("india", RSS_INDIA, "today_india.json")
-    safe_wait(10)
+    safe_wait(12)
     build_section("world", RSS_WORLD, "today_world.json")
     print("\nSab ho gaya! 3 files updated:")
     print("- today_punjab.json (10 news)")
