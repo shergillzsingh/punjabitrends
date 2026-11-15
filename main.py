@@ -17,8 +17,12 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 # --- 2. MODELS (ਸਿਰਫ਼ ਅਸਲੀ ਅਤੇ ਸਹੀ ਮਾਡਲ) ---
 MODELS = [
-    "gemini-2.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
+    "gemini-3-flash",
+    "gemini-2.5-flash",
+    "gemini-3.8-flash",
 ]
 
 # --- 3. RSS LINKS ---
