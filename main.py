@@ -145,12 +145,12 @@ def call_ai(category, topics):
     POINTS STRUCTURE - 8 POINTS, BUT ONE STORY:
     Point 1 - Story Opening: Start like a film. 2-3 lines scene. Do NOT start with date.
     Point 2 - What Happened? Full story step-by-step, with quotes. Who said what?
-    Point 3 - Origin: Where did this issue start? First time when? Background in story style.
-    Point 4 - Controversy: One side says what? Other side says what? Court / Govt / Opposition saying what?
-    Point 5 - Related Developments: SAME category only. If topic is Punjab, tell only other Punjab places. If topic is Canada attack, tell only other attacks on Sikhs. Do NOT jump to America politics or Metro example.
+    Point 3 - Origin: Where did this issue start? First time when? Background in story style.If it concerns a person, provide information about that person's origin.
+    Point 4 - Controversy: One side says what? Other side says what? Court / Govt / Opposition / people saying what? What controversy currently surrounds this subject, and—if there have been any previous controversies—what were they? What was the outcome of those controversies?.
+    Point 5 - Related Developments: SAME category only. What else is happening elsewhere in relation to this subject? What has happened regarding this matter in the past? Is this a global issue, or is it just a minor one—or, to put it another way, how significant is this issue?.
     Point 6 - Impact On People: Benefit / Harm with one small story of a common person - farmer, youth, mother. Not dry list.
-    Point 7 - Data: 2-3 real numbers only. If you do not know, write in Punjabi "ਹਾਲੇ ਸਰਕਾਰੀ ਅੰਕੜਾ ਨਹੀਂ ਆਇਆ" - do NOT invent.
-    Point 8 - What Will Happen Next? Next hearing / decision / date? End with one question for reader.
+    Point 7 - Data: 2-3 real numbers only. If new data is not available, present older data related to the subject—including the dates—detailing the extent of the loss, the actions taken, the outcomes achieved, or whether the matter is still pending.
+    Point 8 - What Will Happen Next? Next hearing / decision / date? End with one question for reader. What decisions might be taken in the future regarding this? What decisions have been taken in the past? How successful have they been, and to what extent have they failed?
 
     OUTPUT: ONLY valid JSON. No markdown. All text in Gurmukhi only.
 
