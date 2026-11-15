@@ -208,7 +208,7 @@ def build_section(category, rss_list, output_file):
     topics = get_trending_topics(rss_list)
     news = call_ai(category, topics)
     # FIX: Sirf tabhi dobara try karo jab 7 se kam news aayi hon
-    if len(news) < 7:
+    if len(news) < 10:
         print(f"Only {len(news)} news for {category}, trying again to fill to 10...")
         safe_wait(5)
         news2 = call_ai(category, topics)
