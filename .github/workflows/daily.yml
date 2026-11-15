@@ -26,14 +26,13 @@ jobs:
       - name: Run main.py
         env:
           PYTHONUNBUFFERED: "1"
-        run: python -u main.py
-        env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -u main.py
 
       - name: Save JSON
         run: |
           git config user.name "PunjabTrends Bot"
           git config user.email "bot@punjabtrends.com"
-          git add today_punjab.json today_india.json today_world.json archive/
+          git add today_punjab.json today_india.json today_world.json
           git commit -m "Daily update" || echo "Koi nava badlav nahi"
           git push
