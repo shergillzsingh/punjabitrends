@@ -2,7 +2,7 @@ import os
 import feedparser
 import json
 import time
-import re
+import random
 from google import genai
 
 # --- 1. API KEY FROM GITHUB SECRETS ---
@@ -13,9 +13,19 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-MODELS = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+# --- 2. MODELS - SCREENSHOT DE HISAB NAAL SET KITE ---
+# Pehla Lite wale, kyunki ohna di RPM zyada hai (15)
+# 3.8 Flash akhar te, kyunki ohdi RPM sirf 5 hai te oh ajj full ho gaya si
+MODELS = [
+    "gemini-3.5-flash-lite",  # RPM 15 - Pehla try
+    "gemini-3.1-flash-lite",  # RPM 15 - Dusra
+    "gemini-2.5-flash-lite",  # RPM 10
+    "gemini-3-flash",         # RPM 5
+    "gemini-2.5-flash",       # RPM 5
+    "gemini-3.8-flash",       # RPM 5 - Akhar te
+]
 
-# --- 2. RSS LINKS ---
+# --- 3. RSS LINKS ---
 RSS_PUNJAB = [
     "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
@@ -39,7 +49,7 @@ RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
 ]
 
-# --- 3. STRICT CATEGORY RULES - NO MIXING ---
+# --- 4. STRICT CATEGORY RULES ---
 CATEGORY_RULES = {
     "punjab": {
         "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc).",
@@ -55,7 +65,7 @@ CATEGORY_RULES = {
     }
 }
 
-# --- 4. TRENDING LOGIC ---
+# --- 5. TRENDING LOGIC ---
 def get_trending_topics(rss_list):
     all_titles = []
     for url in rss_list:
@@ -69,7 +79,7 @@ def get_trending_topics(rss_list):
 
     topics = {}
     for title in all_titles:
-        words = re.findall(r'\w+', title.lower())
+        words = __import__("re").findall(r'\w+', title.lower())
         if len(words) < 3:
             continue
         key = " ".join(words[:4])
@@ -80,9 +90,15 @@ def get_trending_topics(rss_list):
             topics[key]["titles"].append(title)
 
     sorted_topics = sorted(topics.values(), key=lambda x: x["count"], reverse=True)
-    return sorted_topics[:12]  # 12 bhejo, AI 10 filter karke degi
+    return sorted_topics[:12]
 
-# --- 5. AI CALL - TRANSLATE + WRITE + CONTEXT + STRICT FILTER ---
+# --- 6. SAFE WAIT FUNCTION ---
+# Har request to baad 30 sec rukega, taan jo RPM limit na tutte
+def safe_wait(seconds=30):
+    print(f"Waiting {seconds} sec to avoid RPM limit...")
+    time.sleep(seconds)
+
+# --- 7. AI CALL WITH FALLBACK + GAP ---
 def call_ai(category, topics):
     titles_text = ""
     for t in topics:
@@ -144,19 +160,28 @@ def call_ai(category, topics):
     {titles_text}
     """
 
-    for model in MODELS:
+    # FALLBACK LOGIC: Ek fail hove ta duje to kamm lao
+    for i, model in enumerate(MODELS):
         try:
-            print(f"Trying {model} for {category}...")
+            print(f"Trying {model} for {category}... (Attempt {i+1}/{len(MODELS)})")
             resp = client.models.generate_content(model=model, contents=prompt)
             text = resp.text.strip().replace("```json", "").replace("```", "").strip()
-            return json.loads(text)
+            result = json.loads(text)
+            print(f"SUCCESS with {model} for {category}")
+            return result
         except Exception as e:
-            print(f"{model} failed: {e}")
-            time.sleep(20)
+            print(f"FAILED {model} for {category}: {e}")
+            # Agar akhari model nahi hai, ta 30 sec ruk ke agle model te jao
+            if i < len(MODELS) - 1:
+                # 30 sec + thoda random gap, taan jo saare request ikathe na hon
+                wait_time = 30 + random.randint(0, 10)
+                safe_wait(wait_time)
             continue
+
+    print(f"All models failed for {category}")
     return []
 
-# --- 6. BUILD ONE SECTION -> ONE FILE ---
+# --- 8. BUILD ONE SECTION -> ONE FILE ---
 def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
@@ -165,7 +190,6 @@ def build_section(category, rss_list, output_file):
     news = call_ai(category, topics)
 
     if news:
-        # Double Check: Category field galat hove ta kadd do
         news = [n for n in news if n.get("category", "").lower() == category.lower()]
         news = news[:10]
         with open(output_file, "w", encoding="utf-8") as f:
@@ -175,13 +199,19 @@ def build_section(category, rss_list, output_file):
         print(f"Failed {category}, old {output_file} will remain")
     return news
 
-# --- 7. MAIN ---
+# --- 9. MAIN ---
 def main():
+    # Punjab
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
-    time.sleep(20)
+    safe_wait(30)  # Punjab to India vich 30 sec gap
+
+    # India
     build_section("india", RSS_INDIA, "today_india.json")
-    time.sleep(20)
+    safe_wait(30)  # India to World vich 30 sec gap
+
+    # World
     build_section("world", RSS_WORLD, "today_world.json")
+
     print("\nSab ho gaya! 3 files ban gayian:")
     print("- today_punjab.json")
     print("- today_india.json")
