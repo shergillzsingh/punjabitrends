@@ -188,7 +188,7 @@ def call_ai(category, topics):
                     system_instruction=SYSTEM_PROMPT,
                     temperature=0.8,
                     top_p=0.95,
-                    max_output_tokens=2500,
+                    max_output_tokens=8000,
                 )
             )
             text = resp.text.strip().replace("```json", "").replace("```", "").strip()
