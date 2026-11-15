@@ -6,23 +6,22 @@ import random
 import re
 from google import genai
 
-# --- 1. API KEY FROM 【entity-GITHUB¦canonical_name=GitHub】 SECRETS ---
+# --- 1. API KEY FROM GITHUB SECRETS ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not GEMINI_API_KEY:
-    print("ERROR: GEMINI_API_KEY not found in environment!")
+    print("ERROR: GEMINI_API_KEY not found!")
     exit(1)
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS - SCREENSHOT DE HISAB NAAL ---
-# Lite pehla, kyunki ohna di RPM 15 hai. 3.8 akhar te, ohdi RPM sirf 5 hai.
+# --- 2. MODELS - LITE PEHLA, 3.8 AKHAR TE ---
 MODELS = [
-    "gemini-3.5-flash-lite",  # RPM 15
-    "gemini-3.1-flash-lite",  # RPM 15
-    "gemini-2.5-flash-lite",  # RPM 10
-    "gemini-3-flash",         # RPM 5
-    "gemini-2.5-flash",       # RPM 5
-    "gemini-3.8-flash",       # RPM 5 - Akhar te
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash",
+    "gemini-2.5-flash",
+    "gemini-3.8-flash",
 ]
 
 # --- 3. RSS LINKS ---
@@ -49,49 +48,60 @@ RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
 ]
 
-# --- 4. STRICT CATEGORY RULES - NO MIXING ---
+# --- 4. CATEGORY RULES ---
 CATEGORY_RULES = {
     "punjab": {
-        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc).",
-        "blocked": "DO NOT include India national news, Delhi news, or World news. Even if 【entity-Modi¦canonical_name=Modi】 / India news appears in Punjab RSS, REJECT it unless the event happened IN Punjab.",
+        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc). If news mentions Punjab even a little, INCLUDE it.",
+        "blocked": "DO NOT include pure Delhi / Mumbai / World news where Punjab is not mentioned at all. But DO NOT reject Punjab news just because it also mentions India.",
     },
     "india": {
-        "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government, India national issues. Delhi, Mumbai, UP, Bihar etc are allowed.",
-        "blocked": "DO NOT include Punjab-only news (Punjab local crime, Punjab local politics, Punjab village news). DO NOT include World news. If a news is only about Punjab, REJECT it.",
+        "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government. Delhi, Mumbai, UP, Bihar etc are allowed. If news mentions India, INCLUDE it.",
+        "blocked": "DO NOT include Punjab-only local news (Punjab village, Punjab local crime) and DO NOT include pure World news.",
     },
     "world": {
         "allowed": "ONLY news that happened OUTSIDE India. USA, UK, China, Pakistan, Russia, Ukraine, etc.",
-        "blocked": "DO NOT include Punjab news. DO NOT include India news. Even if an India news mentions USA, if the main event is in India, REJECT it.",
+        "blocked": "DO NOT include Punjab news. DO NOT include India news. Even if India news mentions USA, if main event is in India, REJECT it.",
     }
 }
 
-# --- 5. TRENDING LOGIC ---
-# Topic in 5 RSS = Top 1, Topic in 1 RSS = Top 8-10
+# --- 5. TRENDING TOPICS - FIXED GROUPING ---
 def get_trending_topics(rss_list):
     all_titles = []
     for url in rss_list:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:15]:
-                all_titles.append(entry.title.strip())
+            print(f"RSS OK: {url} - Found {len(feed.entries)} entries")
+            for entry in feed.entries[:25]:
+                if entry.title.strip():
+                    all_titles.append(entry.title.strip())
         except Exception as e:
             print(f"RSS Failed: {url} - {e}")
             continue
 
-    topics = {}
-    for title in all_titles:
-        words = re.findall(r'\w+', title.lower())
-        if len(words) < 3:
-            continue
-        key = " ".join(words[:4])
-        if key not in topics:
-            topics[key] = {"count": 0, "titles": []}
-        topics[key]["count"] += 1
-        if title not in topics[key]["titles"]:
-            topics[key]["titles"].append(title)
+    print(f"Total headlines collected: {len(all_titles)}")
 
-    sorted_topics = sorted(topics.values(), key=lambda x: x["count"], reverse=True)
-    return sorted_topics[:12]
+    # Grouping FIX: Pehle wali galti - 4 shabda naal group karna band
+    # Hun har title nu alag rakho, duplicate hi hatao
+    topics = []
+    seen = set()
+    for title in all_titles:
+        low = title.lower().strip()
+        if low in seen:
+            continue
+        seen.add(low)
+        # Count karo - eh topic kinniya feeds vich aaya?
+        count = 0
+        for t2 in all_titles:
+            # Je 60% shabad milde ne ta same topic
+            w1 = set(re.findall(r'\w+', title.lower()))
+            w2 = set(re.findall(r'\w+', t2.lower()))
+            if w1 and w2 and len(w1 & w2) / max(len(w1), 1) > 0.5:
+                count += 1
+        topics.append({"count": count, "titles": [title]})
+    
+    # Trending wale pehla
+    topics = sorted(topics, key=lambda x: x["count"], reverse=True)
+    return topics[:25]
 
 # --- 6. SAFE WAIT ---
 def safe_wait(seconds=30):
@@ -102,7 +112,7 @@ def safe_wait(seconds=30):
 def call_ai(category, topics):
     titles_text = ""
     for t in topics:
-        titles_text += f"\n- Topic (Appeared in {t['count']} RSS Feeds): " + " | ".join(t['titles'][:3])
+        titles_text += f"\n- Topic (Appeared in {t['count']} feeds): " + " | ".join(t['titles'][:2])
 
     rules = CATEGORY_RULES[category]
 
@@ -111,55 +121,59 @@ def call_ai(category, topics):
 
     INPUT:
     Below are news headlines from Hindi and English RSS feeds for category: {category}.
-    Each topic shows in how many RSS feeds it appeared. Higher count = More Trending.
 
-    STRICT CATEGORY FILTER - VERY IMPORTANT, DO NOT BREAK THIS RULE:
-    ALLOWED FOR THIS CATEGORY: {rules['allowed']}
-    BLOCKED FOR THIS CATEGORY: {rules['blocked']}
+    STRICT CATEGORY FILTER:
+    ALLOWED: {rules['allowed']}
+    BLOCKED: {rules['blocked']}
 
-    If a headline belongs to another category, you MUST REJECT it and DO NOT include it in output.
-    Example: If category is "punjab", do NOT include Delhi / Mumbai / World news even if it is trending.
-    Example: If category is "india", do NOT include Punjab-local news or World news.
-    Example: If category is "world", do NOT include any India or Punjab news.
-    Only return news that 100% belongs to "{category}".
+    TASK - READ CAREFULLY:
+    1. You MUST return EXACTLY 10 news items. Not 1, Not 2, Not 5. EXACTLY 10.
+    2. If after filtering you have only 2-3 news, then take remaining from headlines list even if less trending.
+    3. DO NOT reject a news just because it is slightly related to another category. If it mentions {category} even a little, INCLUDE it.
+    4. If still less than 10, split one big topic into 2-3 separate news. Example: Punjab Government news -> 1. Government announcement, 2. Opposition reaction, 3. Public reaction.
+    5. NEVER return less than 10. Empty list is NOT allowed.
+    6. Rank by RSS count. Higher count = Higher trending = Top rank.
 
-    TASK:
-    1. First FILTER headlines by above rule, then select Top 10 Trending from the remaining.
-    2. Rank them by RSS count. Topics that appeared in more RSS feeds must rank higher.
-    3. For each topic, merge all its headlines into ONE combined news story.
+    TITLE RULE - VERY IMPORTANT:
+    - Title must be SHORT, CRISP, like a newspaper headline.
+    - MAX 8-10 words only. MAX 60 characters.
+    - NEVER write a long sentence as title.
+    - WRONG: "2027 diyan chona to pehla Punjab sarkar da vadda daa: naujawan layi quiz mukable te tubewell load regularization vich rahat" (Too long)
+    - CORRECT: "ਪੰਜਾਬ ਸਰਕਾਰ ਦਾ ਵੱਡਾ ਦਾਅ" (Short)
+    - CORRECT: "ਟਿਊਬਵੈੱਲ ਲੋਡ ਵਿੱਚ ਰਾਹਤ" (Short)
+    - If topic has 2 parts, pick ONLY main one for title. Details will go in points.
 
-    4. OUTPUT STYLE - POINTS, NOT ESSAY:
-       Do NOT write a long paragraph essay.
-       Write each news as 5-6 SHORT BULLET POINTS.
-       Each point max 1-2 lines. Clear, crisp, news-style points.
-       Total for one news = around 300-400 words, but divided into points.
+    OUTPUT STYLE - POINTS, NOT ESSAY:
+    - Do NOT write a long paragraph essay.
+    - Write each news as 5-6 SHORT BULLET POINTS.
+    - Each point max 1-2 lines.
+    - Total for one news = around 300-400 words, but divided into points.
+    - Points must cover:
+      Point 1: Main News - Ki hoya?
+      Point 2: CURRENT STATUS TODAY - Ajj ki chal reha hai? Latest update?
+      Point 3: RELATED DEVELOPMENTS - Same topic te hor thawan te ki chal reha hai? Example: If Modi inaugurated Metro, tell Metro status in other cities. Successful or not? NOTE: Related must stay inside SAME category only.
+      Point 4: IMPACT - BENEFIT - Fayda ki hai? Kaun nu fayda?
+      Point 5: IMPACT - HARM / LOSS - Nuksan ki hai? Kaun nu nuksan?
+      Point 6: DATA & STATISTICS - If you know real numbers, include them. If you do not know, do NOT invent fake numbers. Write "official figures not yet available".
 
-       Points must cover:
-       - Point 1: Main News - Ki hoya? (What happened?)
-       - Point 2: CURRENT STATUS TODAY - Ajj di tareekh vich is bare ki chal reha hai? Latest update?
-       - Point 3: RELATED DEVELOPMENTS - Is same topic te hor thawan te ki chal reha hai? Example: If 【entity-Modi¦canonical_name=Modi】 inaugurated Metro, tell Metro status in other cities. Is it successful there or not? NOTE: Related must stay inside SAME category only. For Punjab, give Punjab examples only.
-       - Point 4: IMPACT - BENEFIT - Is da lokan / desh / duniya nu ki fayda hai? Kaun nu fayda hovega?
-       - Point 5: IMPACT - HARM / LOSS - Is da nuksan ki hai? Kaun nu nuksan hovega?
-       - Point 6: DATA & STATISTICS - If you know real numbers, include them. Cost, km, passengers, %, deaths, profit/loss. If you do not know exact data, do NOT invent fake numbers. Write "official figures not yet available".
-
-    5. LANGUAGE RULES:
-       - Use ONLY Gurmukhi script. NEVER use Roman Punjabi (e.g. never write "Punjab vich").
-       - Translate English/Hindi names to Punjabi: Narendra Modi -> ਨਰਿੰਦਰ ਮੋਦੀ, Donald Trump -> ਡੋਨਲਡ ਟਰੰਪ
-       - Use Punjabi words, not Hindi words.
-    6. Return ONLY valid JSON. No markdown, no explanation, no extra text.
+    LANGUAGE RULES:
+    - Use ONLY Gurmukhi script. NEVER use Roman Punjabi.
+    - Translate names: Narendra Modi -> ਨਰਿੰਦਰ ਮੋਦੀ, Donald Trump -> ਡੋਨਲਡ ਟਰੰਪ
+    - Use Punjabi words, not Hindi words.
+    - Return ONLY valid JSON. No markdown, no explanation.
 
     OUTPUT JSON FORMAT:
     [
       {{
         "category": "{category}",
-        "title": "News title in Gurmukhi Punjabi",
+        "title": "MAX 8-10 words, MAX 60 chars, short headline in Gurmukhi",
         "points": [
-          "Point 1 - Main News in Gurmukhi Punjabi",
-          "Point 2 - Current Status Today in Gurmukhi Punjabi",
-          "Point 3 - Related Developments in Gurmukhi Punjabi",
-          "Point 4 - Benefit in Gurmukhi Punjabi",
-          "Point 5 - Harm / Loss in Gurmukhi Punjabi",
-          "Point 6 - Statistics in Gurmukhi Punjabi"
+          "Point 1 - Main News in Gurmukhi",
+          "Point 2 - Current Status Today in Gurmukhi",
+          "Point 3 - Related Developments in Gurmukhi",
+          "Point 4 - Benefit in Gurmukhi",
+          "Point 5 - Harm / Loss in Gurmukhi",
+          "Point 6 - Statistics in Gurmukhi"
         ],
         "source": "Source name",
         "trending_score": 5
@@ -176,7 +190,7 @@ def call_ai(category, topics):
             resp = client.models.generate_content(model=model, contents=prompt)
             text = resp.text.strip().replace("```json", "").replace("```", "").strip()
             result = json.loads(text)
-            print(f"SUCCESS with {model} for {category}")
+            print(f"SUCCESS with {model} for {category} - Got {len(result)} news")
             return result
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
@@ -188,17 +202,33 @@ def call_ai(category, topics):
     print(f"All models failed for {category}")
     return []
 
-# --- 8. BUILD ONE SECTION -> ONE FILE ---
+# --- 8. BUILD ONE SECTION -> ONE FILE - 10 PAKKI ---
 def build_section(category, rss_list, output_file):
     print(f"\n--- Building {category} -> {output_file} ---")
     topics = get_trending_topics(rss_list)
-    print(f"Found {len(topics)} trending topics for {category}")
+    print(f"Found {len(topics)} topics for {category}")
 
     news = call_ai(category, topics)
 
+    # FIX: Je 10 to ghat aaiya, ta fer try karo bharne lai
+    if len(news) < 10:
+        print(f"Only {len(news)} news for {category}, trying again to fill to 10...")
+        safe_wait(10)
+        news2 = call_ai(category, topics)
+        seen_titles = set(n.get('title', '') for n in news)
+        for n in news2:
+            if n.get('title', '') not in seen_titles:
+                news.append(n)
+                seen_titles.add(n.get('title', ''))
+            if len(news) >= 10:
+                break
+        print(f"After 2nd try, total: {len(news)}")
+
+    # Category filter + Sirf 10
+    news = [n for n in news if n.get("category", "").lower() == category.lower()]
+    news = news[:10]
+
     if news:
-        news = [n for n in news if n.get("category", "").lower() == category.lower()]
-        news = news[:10]
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(news, f, ensure_ascii=False, indent=2)
         print(f"Saved {len(news)} news to {output_file}")
@@ -217,9 +247,9 @@ def main():
     build_section("world", RSS_WORLD, "today_world.json")
 
     print("\nSab ho gaya! 3 files ban gayian:")
-    print("- today_punjab.json")
-    print("- today_india.json")
-    print("- today_world.json")
+    print("- today_punjab.json (10 news)")
+    print("- today_india.json (10 news)")
+    print("- today_world.json (10 news)")
 
 if __name__ == "__main__":
     main()
