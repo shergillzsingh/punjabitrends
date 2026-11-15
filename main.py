@@ -1,39 +1,28 @@
-# PunjabTrends - Daily Trending Articles - FINAL VERSION
-# Punjab + India + World
-# - RSS Hindi / English hove tan v Gemini Punjabi vich likhega
-# - Topic v Punjabi vich hovega
-# - Je RSS fail hove tan Fallback naal v article banega - items [] nahi aayega
-# - Roz savere 7 vaje GitHub Actions naal chalda hai
-# - Gemini Flash-Lite - FREE 500/day
-
 import os
-import json
-import re
-import time
 import feedparser
-import requests
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import json
+import time
+import re
+from google import genai
 
-# ================= CONFIG =================
+# --- 1. API KEY FROM GITHUB SECRETS ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if not GEMINI_API_KEY:
+    print("ERROR: GEMINI_API_KEY not found in environment!")
+    exit(1)
+
+client = genai.Client(api_key=GEMINI_API_KEY)
+
 MODELS = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
-TOP_N = 10  # Har section vich kinne lekh - 10 chahide tan 10 kar de
-
-IST = ZoneInfo("Asia/Kolkata")
-TODAY = datetime.now(IST)
-DATE_STR = TODAY.strftime("%d %B %Y")  # 14 November 2026
-DATE_FILE = TODAY.strftime("%Y-%m-%d")  # 2026-11-14
-
-# ================= RSS FEEDS - TERE WALE =================
+# --- 2. RSS LINKS ---
 RSS_PUNJAB = [
     "https://www.ptcnews.tv/rssfeed/trending-in-punjabi",
     "https://punjab.news18.com/commonfeeds/v1/pan/rss/punjab.xml",
     "https://www.ptcnews.tv/rssfeed/punjab",
     "https://www.bhaskar.com/rss-v1--category-1743.xml",
     "https://publish.tribuneindia.com/state/punjab/feed/",
-    "https://raw.githubusercontent.com/bbc/world-service-rss/refs/heads/main/punjabi.md",
+    "https://feeds.bbci.co.uk/punjabi/rss.xml",
 ]
 
 RSS_INDIA = [
@@ -50,210 +39,148 @@ RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
 ]
 
-# ================= FALLBACK - Je RSS khali hove =================
-FALLBACK = {
-    "punjab": [
-        "Punjab vich aaj da mausam",
-        "Punjab di mandi vich fasal da bhav",
-        "Punjab vich nasha khilaf action",
-        "Chandigarh traffic challan",
-        "Punjab school college ch chhuttiyan",
-        "Punjab vich bijli pani di samasya",
-        "Punjab de kisan di mang",
-    ],
-    "india": [
-        "India vich aaj da mausam",
-        "Delhi vich pradushan",
-        "India cricket team da match",
-        "Petrol diesel da rate",
-        "India vich nayi yojana",
-        "Sansad vich aaj di charcha",
-        "India vich railway di khabar",
-    ],
-    "world": [
-        "America vich aaj di vaddi khabar",
-        "Duniya vich mausam da badlaav",
-        "World cricket di khabar",
-        "Canada vich Punjabi community",
-        "UK vich aaj di khabar",
-        "Australia vich Punjabi",
-        "Duniya vich tel da rate",
-    ],
+# --- 3. STRICT CATEGORY RULES - NO MIXING ---
+CATEGORY_RULES = {
+    "punjab": {
+        "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc).",
+        "blocked": "DO NOT include India national news, Delhi news, or World news. Even if Modi / India news appears in Punjab RSS, REJECT it unless the event happened IN Punjab.",
+    },
+    "india": {
+        "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government, India national issues. Delhi, Mumbai, UP, Bihar etc are allowed.",
+        "blocked": "DO NOT include Punjab-only news (Punjab local crime, Punjab local politics, Punjab village news). DO NOT include World news. If a news is only about Punjab, REJECT it.",
+    },
+    "world": {
+        "allowed": "ONLY news that happened OUTSIDE India. USA, UK, China, Pakistan, Russia, Ukraine, etc.",
+        "blocked": "DO NOT include Punjab news. DO NOT include India news. Even if an India news mentions USA, if the main event is in India, REJECT it.",
+    }
 }
 
-# ================= HELPERS =================
-def clean_text(t):
-    if not t:
-        return ""
-    t = re.sub(r'<[^>]+>', '', t)
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t
-
-def get_trending_topics(rss_list, section):
-    seen = set()
-    topics = []
+# --- 4. TRENDING LOGIC ---
+def get_trending_topics(rss_list):
+    all_titles = []
     for url in rss_list:
         try:
-            print(f"RSS padh reha: {url}")
             feed = feedparser.parse(url)
-            print(f"  -> Entries mile: {len(feed.entries)}")
             for entry in feed.entries[:15]:
-                title = clean_text(entry.get("title", ""))
-                if len(title) < 10 or len(title) > 120:
-                    continue
-                low = title.lower()
-                if low in seen:
-                    continue
-                if any(x in low for x in ["live updates", "live:", "watch:", "video:"]):
-                    continue
-                seen.add(low)
-                topics.append(title)
-                if len(topics) >= TOP_N:
-                    return topics
+                all_titles.append(entry.title.strip())
         except Exception as e:
-            print(f"RSS error {url}: {e}")
+            print(f"RSS Failed: {url} - {e}")
             continue
-    print(f"RSS ton topics mile: {len(topics)}")
-    if len(topics) < 3:
-        print(f"RSS khali hai, FALLBACK use kar reha: {section}")
-        for t in FALLBACK.get(section, []):
-            if t.lower() not in seen:
-                topics.append(t)
-            if len(topics) >= TOP_N:
-                break
-    return topics[:TOP_N]
 
-def call_gemini(prompt):
+    topics = {}
+    for title in all_titles:
+        words = re.findall(r'\w+', title.lower())
+        if len(words) < 3:
+            continue
+        key = " ".join(words[:4])
+        if key not in topics:
+            topics[key] = {"count": 0, "titles": []}
+        topics[key]["count"] += 1
+        if title not in topics[key]["titles"]:
+            topics[key]["titles"].append(title)
+
+    sorted_topics = sorted(topics.values(), key=lambda x: x["count"], reverse=True)
+    return sorted_topics[:12]  # 12 bhejo, AI 10 filter karke degi
+
+# --- 5. AI CALL - TRANSLATE + WRITE + CONTEXT + STRICT FILTER ---
+def call_ai(category, topics):
+    titles_text = ""
+    for t in topics:
+        titles_text += f"\n- Topic (Appeared in {t['count']} RSS Feeds): " + " | ".join(t['titles'][:3])
+
+    rules = CATEGORY_RULES[category]
+
+    prompt = f"""
+    You are a professional Punjabi news editor and analyst.
+
+    INPUT:
+    Below are news headlines from Hindi and English RSS feeds for category: {category}.
+    Each topic shows in how many RSS feeds it appeared. Higher count = More Trending.
+
+    STRICT CATEGORY FILTER - VERY IMPORTANT, DO NOT BREAK THIS RULE:
+    ALLOWED FOR THIS CATEGORY: {rules['allowed']}
+    BLOCKED FOR THIS CATEGORY: {rules['blocked']}
+
+    If a headline belongs to another category, you MUST REJECT it and DO NOT include it in output.
+    Example: If category is "punjab", do NOT include Delhi / Mumbai / World news even if it is trending.
+    Example: If category is "india", do NOT include Punjab-local news or World news.
+    Example: If category is "world", do NOT include any India or Punjab news.
+    Only return news that 100% belongs to "{category}".
+
+    TASK:
+    1. First FILTER headlines by above rule, then select Top 10 Trending from the remaining.
+    2. Rank them by RSS count. Topics that appeared in more RSS feeds must rank higher.
+    3. For each topic, merge all its headlines into ONE combined news story.
+    4. Write each story in 300-400 words in clean, natural GURMUKHI PUNJABI.
+    5. Do NOT do literal translation. Rewrite it like a Punjabi newspaper article.
+
+    6. IMPORTANT - ADD FULL CONTEXT, NOT JUST HEADLINE:
+       For each topic, you must also explain in the SAME summary:
+       a) CURRENT STATUS TODAY: As of today, what is the latest update on this topic? What is happening right now?
+       b) RELATED DEVELOPMENTS: What is happening on this same topic in other places?
+          Example: If Modi inaugurated a Metro, then tell what is the status of Metro in other cities / states / countries. Is it successful there or not?
+          NOTE: Related developments must still stay inside the SAME category. For Punjab news, give related Punjab examples only. Do NOT bring India/World news into Punjab file.
+       c) IMPACT ANALYSIS: Is this topic beneficial or harmful for people / country / world? Who will benefit and who will face loss?
+       d) DATA & STATISTICS: If you know any real numbers, include them. Example: cost, length in km, number of passengers, percentage growth, deaths, profit/loss. If you do not know exact data, do NOT invent fake numbers. Write "official figures not yet available".
+
+    7. LANGUAGE RULES:
+       - Use ONLY Gurmukhi script. NEVER use Roman Punjabi.
+       - Translate English/Hindi names to Punjabi: Narendra Modi -> ਨਰਿੰਦਰ ਮੋਦੀ, Donald Trump -> ਡੋਨਲਡ ਟਰੰਪ
+       - Use Punjabi words, not Hindi words.
+    8. Return ONLY valid JSON. No markdown, no explanation, no extra text.
+
+    OUTPUT JSON FORMAT:
+    [
+      {{
+        "category": "{category}",
+        "title": "News title in Gurmukhi Punjabi",
+        "summary": "300-400 words news in Gurmukhi Punjabi. Must include: Main News + Current Status Today + Related Developments (same category only) + Impact (Benefit / Harm) + Statistics if available.",
+        "source": "Source name",
+        "trending_score": 5
+      }}
+    ]
+
+    HEADLINES:
+    {titles_text}
+    """
+
     for model in MODELS:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 3500}
-        }
         try:
-            print(f"Gemini try: {model}")
-            r = requests.post(url, json=payload, timeout=90)
-            print(f"  -> Status: {r.status_code}")
-            if r.status_code != 200:
-                print(f"  -> Error: {r.text[:400]}")
-                continue
-            data = r.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            print(f"  -> Mil gaya: {len(text)} chars")
-            return text.strip()
+            print(f"Trying {model} for {category}...")
+            resp = client.models.generate_content(model=model, contents=prompt)
+            text = resp.text.strip().replace("```json", "").replace("```", "").strip()
+            return json.loads(text)
         except Exception as e:
-            print(f"  -> Exception: {e}")
+            print(f"{model} failed: {e}")
+            time.sleep(20)
             continue
-    print("Sab model fail ho gaye!")
-    return ""
+    return []
 
-def clean_article(article):
-    if not article:
-        return ""
-    article = article.replace("**", "").replace("##", "").replace("###", "")
-    return article.strip()
+# --- 6. BUILD ONE SECTION -> ONE FILE ---
+def build_section(category, rss_list, output_file):
+    print(f"\n--- Building {category} -> {output_file} ---")
+    topics = get_trending_topics(rss_list)
+    print(f"Found {len(topics)} trending topics for {category}")
 
-def translate_topic_to_punjabi(topic):
-    """Hindi / English Topic nu Gurmukhi Punjabi vich badlo"""
-    prompt = f"""
-Heth likhe Topic nu Gurmukhi Punjabi vich anuvad karo.
-Topic Hindi ya English vich ho sakda hai.
+    news = call_ai(category, topics)
 
-Topic: {topic}
-
-Niyam:
-1. Sirf Gurmukhi Punjabi vich likho. Don't use Roman Punjabi.
-2. Sirf 1 line deo - sirf Punjabi Topic. Koi ** , ## , heading, ya vyakhya na deo.
-3. Jivein: "Delhi Mein Pradushan Badha" -> "ਦਿੱਲੀ ਵਿੱਚ ਪ੍ਰਦੂਸ਼ਣ ਵਧਿਆ"
-"""
-    punjabi_topic = call_gemini(prompt)
-    if punjabi_topic:
-        punjabi_topic = punjabi_topic.split("\n")[0].strip()
-        punjabi_topic = punjabi_topic.replace("**", "").replace("##", "").strip()
-        if 5 < len(punjabi_topic) < 120:
-            return punjabi_topic
-    return topic
-
-def make_article(topic, section):
-    if section == "punjab":
-        scope = "Only Related to Punjab. also Impact on Punjab."
-    elif section == "india":
-        scope = "Only Related to India. don't include Punjab. and Impact on Punjab"
+    if news:
+        # Double Check: Category field galat hove ta kadd do
+        news = [n for n in news if n.get("category", "").lower() == category.lower()]
+        news = news[:10]
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(news, f, ensure_ascii=False, indent=2)
+        print(f"Saved {len(news)} news to {output_file}")
     else:
-        scope = "Only Related to International, World Level. don't Include India-Punjab. impact on Punjab / India."
+        print(f"Failed {category}, old {output_file} will remain")
+    return news
 
-    prompt = f"""
-Tusi ik Punjabi news writer ho. Heth likhe Trending Topic te Gurmukhi Punjabi vich ik saada, saaf-suthra article likho.
-Topic: {topic}
-Section: {section} - {scope}
-
-Zaroori niyam:
-1. Topic Hindi ya English vich v ho sakda hai - tusi usnu padh ke Gurmukhi Punjabi vich samjhao. 
-2. Boli: Sirf Gurmukhi Punjabi. Don't use Roman Punjabi.
-3. ** , ## , # , * - kade v na varteo. Bold layi ** na pao.
-4. Shuru vich date ya heading na pao. Sidha "Topic" naal shuru karo.
-5. Article di lambai: 350-450 shabd.
-6. Structure:
-   - Para 1: What Happened? Why this topic in trending?
-   - Para 2: Background - Pehlan ki si, hun ki hai?
-   - Para 3: What peoples/opponets says about this topic,
-   - Para 4: Dooje states / deshan naal tulna - othe ki hoya related to this topic.
-   - Para 5: Punjab te ki asar? successfull or unsuccessfull
-   - Para 6: Agge ki hovega? What next?
-7. Koi jhoothi khabar na banao. Je pakki jaankari na hove tan "hun tak mili jaankari mutabik" likho.
-8. Sirf article da text deo. Koi heading, date, ya ** na deo.
-"""
-    raw = call_gemini(prompt)
-    time.sleep(2)
-    return clean_article(raw)
-
-def build_section(section_name, rss_list, output_file):
-    print(f"\n========== {section_name.upper()} ==========")
-    topics = get_trending_topics(rss_list, section_name)
-    print(f"Final topics: {topics}")
-    items = []
-    for topic in topics[:TOP_N]:
-        print(f"Article bana reha: {topic}")
-        # Pehlan Topic nu Punjabi vich kar lo - Hindi / English -> Punjabi
-        punjabi_topic = translate_topic_to_punjabi(topic)
-        print(f"  -> Punjabi Topic: {punjabi_topic}")
-        topic = punjabi_topic
-        article = make_article(topic, section_name)
-        if not article or len(article) < 200:
-            print(f"  -> Chhota/khali, dobara try: {topic}")
-            article = make_article(topic, section_name)
-        if not article or len(article) < 200:
-            print(f"  -> Fer v khali, chhota article bana reha taan items [] na hove")
-            article = f"Sat Sri Akal Dosto! Aaj hai {DATE_STR}. Aao gall karde haan {topic} baare. Ajjkal social media ton lai ke chaah de khokheyaan tak ise gall di charcha hai. Hun tak mili jaankari mutabik eh mudda lokan vich kaafi charcha vich hai. Punjab de lokan te isda sidha asar penda hai. Agge ki hovega, eh aoun wale dina vich pata lagega. Tusi is baare ki sochde ho, comment vich zaroor dasso."
-        items.append({"topic": topic, "article": article})
-        print(f"  -> Ho gaya ({len(article)} chars)")
-        time.sleep(1)
-
-    data = {
-        "date": DATE_STR,
-        "date_file": DATE_FILE,
-        "section": section_name,
-        "updated": TODAY.strftime("%Y-%m-%d %H:%M IST"),
-        "items": items
-    }
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Saved: {output_file} - {len(items)} articles")
-
-    # Archive - purane din de article rahenge
-    os.makedirs(f"archive/{section_name}", exist_ok=True)
-    with open(f"archive/{section_name}/{DATE_FILE}.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return data
-
+# --- 7. MAIN ---
 def main():
-    print(f"Start: {TODAY} - Punjab + India + World")
-    print(f"API Key hai? {bool(GEMINI_API_KEY)} - Length: {len(GEMINI_API_KEY) if GEMINI_API_KEY else 0}")
-    if not GEMINI_API_KEY:
-        print("ERROR: GEMINI_API_KEY nahi mili! GitHub Settings > Secrets vich pao.")
-        return
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
+    time.sleep(20)
     build_section("india", RSS_INDIA, "today_india.json")
+    time.sleep(20)
     build_section("world", RSS_WORLD, "today_world.json")
     print("\nSab ho gaya! 3 files ban gayian:")
     print("- today_punjab.json")
