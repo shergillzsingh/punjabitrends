@@ -3,9 +3,10 @@ import feedparser
 import json
 import time
 import random
+import re
 from google import genai
 
-# --- 1. API KEY FROM GITHUB SECRETS ---
+# --- 1. API KEY FROM 【entity-GITHUB¦canonical_name=GitHub】 SECRETS ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not GEMINI_API_KEY:
     print("ERROR: GEMINI_API_KEY not found in environment!")
@@ -13,12 +14,11 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. MODELS - SCREENSHOT DE HISAB NAAL SET KITE ---
-# Pehla Lite wale, kyunki ohna di RPM zyada hai (15)
-# 3.8 Flash akhar te, kyunki ohdi RPM sirf 5 hai te oh ajj full ho gaya si
+# --- 2. MODELS - SCREENSHOT DE HISAB NAAL ---
+# Lite pehla, kyunki ohna di RPM 15 hai. 3.8 akhar te, ohdi RPM sirf 5 hai.
 MODELS = [
-    "gemini-3.5-flash-lite",  # RPM 15 - Pehla try
-    "gemini-3.1-flash-lite",  # RPM 15 - Dusra
+    "gemini-3.5-flash-lite",  # RPM 15
+    "gemini-3.1-flash-lite",  # RPM 15
     "gemini-2.5-flash-lite",  # RPM 10
     "gemini-3-flash",         # RPM 5
     "gemini-2.5-flash",       # RPM 5
@@ -49,11 +49,11 @@ RSS_WORLD = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
 ]
 
-# --- 4. STRICT CATEGORY RULES ---
+# --- 4. STRICT CATEGORY RULES - NO MIXING ---
 CATEGORY_RULES = {
     "punjab": {
         "allowed": "ONLY news that happened IN Punjab, or is directly about Punjab people, Punjab government, Punjab cities (Amritsar, Ludhiana, Jalandhar, Patiala, Bathinda, etc).",
-        "blocked": "DO NOT include India national news, Delhi news, or World news. Even if Modi / India news appears in Punjab RSS, REJECT it unless the event happened IN Punjab.",
+        "blocked": "DO NOT include India national news, Delhi news, or World news. Even if 【entity-Modi¦canonical_name=Modi】 / India news appears in Punjab RSS, REJECT it unless the event happened IN Punjab.",
     },
     "india": {
         "allowed": "ONLY news that happened IN India (outside Punjab), or is about India national government, India national issues. Delhi, Mumbai, UP, Bihar etc are allowed.",
@@ -66,6 +66,7 @@ CATEGORY_RULES = {
 }
 
 # --- 5. TRENDING LOGIC ---
+# Topic in 5 RSS = Top 1, Topic in 1 RSS = Top 8-10
 def get_trending_topics(rss_list):
     all_titles = []
     for url in rss_list:
@@ -79,7 +80,7 @@ def get_trending_topics(rss_list):
 
     topics = {}
     for title in all_titles:
-        words = __import__("re").findall(r'\w+', title.lower())
+        words = re.findall(r'\w+', title.lower())
         if len(words) < 3:
             continue
         key = " ".join(words[:4])
@@ -92,8 +93,7 @@ def get_trending_topics(rss_list):
     sorted_topics = sorted(topics.values(), key=lambda x: x["count"], reverse=True)
     return sorted_topics[:12]
 
-# --- 6. SAFE WAIT FUNCTION ---
-# Har request to baad 30 sec rukega, taan jo RPM limit na tutte
+# --- 6. SAFE WAIT ---
 def safe_wait(seconds=30):
     print(f"Waiting {seconds} sec to avoid RPM limit...")
     time.sleep(seconds)
@@ -127,30 +127,40 @@ def call_ai(category, topics):
     1. First FILTER headlines by above rule, then select Top 10 Trending from the remaining.
     2. Rank them by RSS count. Topics that appeared in more RSS feeds must rank higher.
     3. For each topic, merge all its headlines into ONE combined news story.
-    4. Write each story in 300-400 words in clean, natural GURMUKHI PUNJABI.
-    5. Do NOT do literal translation. Rewrite it like a Punjabi newspaper article.
 
-    6. IMPORTANT - ADD FULL CONTEXT, NOT JUST HEADLINE:
-       For each topic, you must also explain in the SAME summary:
-       a) CURRENT STATUS TODAY: As of today, what is the latest update on this topic? What is happening right now?
-       b) RELATED DEVELOPMENTS: What is happening on this same topic in other places?
-          Example: If Modi inaugurated a Metro, then tell what is the status of Metro in other cities / states / countries. Is it successful there or not?
-          NOTE: Related developments must still stay inside the SAME category. For Punjab news, give related Punjab examples only. Do NOT bring India/World news into Punjab file.
-       c) IMPACT ANALYSIS: Is this topic beneficial or harmful for people / country / world? Who will benefit and who will face loss?
-       d) DATA & STATISTICS: If you know any real numbers, include them. Example: cost, length in km, number of passengers, percentage growth, deaths, profit/loss. If you do not know exact data, do NOT invent fake numbers. Write "official figures not yet available".
+    4. OUTPUT STYLE - POINTS, NOT ESSAY:
+       Do NOT write a long paragraph essay.
+       Write each news as 5-6 SHORT BULLET POINTS.
+       Each point max 1-2 lines. Clear, crisp, news-style points.
+       Total for one news = around 300-400 words, but divided into points.
 
-    7. LANGUAGE RULES:
-       - Use ONLY Gurmukhi script. NEVER use Roman Punjabi.
+       Points must cover:
+       - Point 1: Main News - Ki hoya? (What happened?)
+       - Point 2: CURRENT STATUS TODAY - Ajj di tareekh vich is bare ki chal reha hai? Latest update?
+       - Point 3: RELATED DEVELOPMENTS - Is same topic te hor thawan te ki chal reha hai? Example: If 【entity-Modi¦canonical_name=Modi】 inaugurated Metro, tell Metro status in other cities. Is it successful there or not? NOTE: Related must stay inside SAME category only. For Punjab, give Punjab examples only.
+       - Point 4: IMPACT - BENEFIT - Is da lokan / desh / duniya nu ki fayda hai? Kaun nu fayda hovega?
+       - Point 5: IMPACT - HARM / LOSS - Is da nuksan ki hai? Kaun nu nuksan hovega?
+       - Point 6: DATA & STATISTICS - If you know real numbers, include them. Cost, km, passengers, %, deaths, profit/loss. If you do not know exact data, do NOT invent fake numbers. Write "official figures not yet available".
+
+    5. LANGUAGE RULES:
+       - Use ONLY Gurmukhi script. NEVER use Roman Punjabi (e.g. never write "Punjab vich").
        - Translate English/Hindi names to Punjabi: Narendra Modi -> ਨਰਿੰਦਰ ਮੋਦੀ, Donald Trump -> ਡੋਨਲਡ ਟਰੰਪ
        - Use Punjabi words, not Hindi words.
-    8. Return ONLY valid JSON. No markdown, no explanation, no extra text.
+    6. Return ONLY valid JSON. No markdown, no explanation, no extra text.
 
     OUTPUT JSON FORMAT:
     [
       {{
         "category": "{category}",
         "title": "News title in Gurmukhi Punjabi",
-        "summary": "300-400 words news in Gurmukhi Punjabi. Must include: Main News + Current Status Today + Related Developments (same category only) + Impact (Benefit / Harm) + Statistics if available.",
+        "points": [
+          "Point 1 - Main News in Gurmukhi Punjabi",
+          "Point 2 - Current Status Today in Gurmukhi Punjabi",
+          "Point 3 - Related Developments in Gurmukhi Punjabi",
+          "Point 4 - Benefit in Gurmukhi Punjabi",
+          "Point 5 - Harm / Loss in Gurmukhi Punjabi",
+          "Point 6 - Statistics in Gurmukhi Punjabi"
+        ],
         "source": "Source name",
         "trending_score": 5
       }}
@@ -160,7 +170,6 @@ def call_ai(category, topics):
     {titles_text}
     """
 
-    # FALLBACK LOGIC: Ek fail hove ta duje to kamm lao
     for i, model in enumerate(MODELS):
         try:
             print(f"Trying {model} for {category}... (Attempt {i+1}/{len(MODELS)})")
@@ -171,9 +180,7 @@ def call_ai(category, topics):
             return result
         except Exception as e:
             print(f"FAILED {model} for {category}: {e}")
-            # Agar akhari model nahi hai, ta 30 sec ruk ke agle model te jao
             if i < len(MODELS) - 1:
-                # 30 sec + thoda random gap, taan jo saare request ikathe na hon
                 wait_time = 30 + random.randint(0, 10)
                 safe_wait(wait_time)
             continue
@@ -201,15 +208,12 @@ def build_section(category, rss_list, output_file):
 
 # --- 9. MAIN ---
 def main():
-    # Punjab
     build_section("punjab", RSS_PUNJAB, "today_punjab.json")
-    safe_wait(30)  # Punjab to India vich 30 sec gap
+    safe_wait(30)
 
-    # India
     build_section("india", RSS_INDIA, "today_india.json")
-    safe_wait(30)  # India to World vich 30 sec gap
+    safe_wait(30)
 
-    # World
     build_section("world", RSS_WORLD, "today_world.json")
 
     print("\nSab ho gaya! 3 files ban gayian:")
